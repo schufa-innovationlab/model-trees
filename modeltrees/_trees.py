@@ -1,11 +1,5 @@
 """
 This module defines model tree estimator classes for classification and regression.
-
-References
-----------
-.. [1] Broelemann, K. and Kasneci, G.,
-   "A Gradient-Based Split Criterion for Highly Accurate and Transparent Model Trees",
-   Proceedings of the International Joint Conference on Artificial Intelligence (IJCAI), 2019
 """
 
 #  Copyright 2019 SCHUFA Holding AG
