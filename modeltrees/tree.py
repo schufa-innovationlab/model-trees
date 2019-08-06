@@ -22,8 +22,9 @@ References
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from sklearn.base import MetaEstimatorMixin, BaseEstimator, RegressorMixin, clone
-from sklearn.linear_model import LinearRegression
+from sklearn.base import MetaEstimatorMixin, BaseEstimator, RegressorMixin, ClassifierMixin, clone
+from sklearn.linear_model import LinearRegression, LogisticRegression
+from sklearn.dummy import DummyClassifier
 from abc import ABCMeta, abstractmethod
 
 import numpy as np
@@ -335,7 +336,7 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
         Parameters
         ----------
         X : array-like, shape = [n_samples, n_features]
-            Input Features of the training data
+            Input Features of the samples
 
         Returns
         -------
@@ -360,7 +361,7 @@ class ModelTreeRegressor(BaseModelTree, RegressorMixin):
         Maximal depth of the tree
     min_samples_split : int (default = 10)
         Minimal number of samples that go to each split
-    gradient_function
+    gradient_function : callable
         A function that computes the gradient of a model at a given point.
         The gradient_function gets 3 parameters: a fitted model (see base_estimator),
         the input matrix X and the target vector y.
@@ -376,6 +377,7 @@ class ModelTreeRegressor(BaseModelTree, RegressorMixin):
        "A Gradient-Based Split Criterion for Highly Accurate and Transparent Model Trees",
        Proceedings of the International Joint Conference on Artificial Intelligence (IJCAI), 2019
     """
+
     def __init__(self,
                  base_estimator=LinearRegression(),
                  max_depth=3,
@@ -388,3 +390,197 @@ class ModelTreeRegressor(BaseModelTree, RegressorMixin):
             gradient_function=gradient_function
         )
 
+
+class ModelTreeClassifier(BaseModelTree, ClassifierMixin):
+    """
+    Model Tree implementation for classification problems.
+
+    This algorithm uses the gradient-based split criterion [1]_ to create the model tree structure.
+    Note that this criterion requires to compute gradients of the base estimators.
+
+    Parameters
+    ----------
+    base_estimator
+        Base estimator to be used in the nodes. This should be an scikit-learn compatible regressor.
+    max_depth : int (default = 3)
+        Maximal depth of the tree
+    min_samples_split : int (default = 10)
+        Minimal number of samples that go to each split
+    gradient_function : callable
+        A function that computes the gradient of a model at a given point.
+        The gradient_function gets 3 parameters: a fitted model (see base_estimator),
+        the input matrix X and the target vector y.
+    dummy_classifier
+        Base estimator that is used in nodes where all training samples belong to one class.
+
+    Attributes
+    ----------
+    root_ : TreeNode
+        Root Node of the tree structure
+    classes_ : array, shape (n_classes, )
+        A list of class labels known to the classifier.
+
+    References
+    ----------
+    .. [1] Broelemann, K. and Kasneci, G.,
+       "A Gradient-Based Split Criterion for Highly Accurate and Transparent Model Trees",
+       Proceedings of the International Joint Conference on Artificial Intelligence (IJCAI), 2019
+    """
+
+    def __init__(self,
+                 base_estimator=LogisticRegression(solver="liblinear"),
+                 max_depth=3,
+                 min_samples_split=10,
+                 gradient_function=None,
+                 dummy_classifier=DummyClassifier(strategy="prior")):
+        super().__init__(
+            base_estimator=base_estimator,
+            max_depth=max_depth,
+            min_samples_split=min_samples_split,
+            gradient_function=gradient_function)
+        self.dummy_classifier = dummy_classifier
+
+    def predict_proba(self, X):
+        """
+        Predict the probabilities for each class
+
+        Parameters
+        ----------
+        X : array-like, shape = [n_samples, n_features]
+            Input Features of the samples
+
+        Returns
+        -------
+        P: array, shape= [n_samples, n_classes]
+            Probabilities of samples to belong to the classes.
+        """
+
+        def leaf_predict_proba(estimator, X_):
+            # Predict probabilities
+            p = estimator.predict_proba(X_)
+            # Map classes
+            p = _map_columns(
+                output_columns=self.classes_,
+                input_columns=estimator.classes_,
+                X_input=p,
+                default_value=0
+            )
+
+            return p
+
+        return self._apply_sample_wise_function_on_leafs(leaf_predict_proba, X)
+
+    def predict_log_proba(self, X):
+        """
+        Predict the probabilities for each class
+
+        Parameters
+        ----------
+        X : array-like, shape = [n_samples, n_features]
+            Input Features of the samples
+
+        Returns
+        -------
+        P: array, shape= [n_samples, n_classes]
+            Probabilities of samples to belong to the classes.
+        """
+
+        def leaf_predict_log_proba(estimator, X_):
+            # Predict probabilities
+            p = estimator.predict_log_proba(X_)
+            # Map classes
+            p = _map_columns(
+                output_columns=self.classes_,
+                input_columns=estimator.classes_,
+                X_input=p,
+                default_value=-np.inf
+            )
+
+            return p
+
+        return self._apply_sample_wise_function_on_leafs(leaf_predict_log_proba, X)
+
+    def _create_and_fit_estimator(self, X, y):
+        """
+        Creates a new estimator for a node and trains it with the provided data.
+
+        Parameters
+        ----------
+        X : array-like, shape = [n_samples, n_features]
+            Input Features of the training data
+        y : array-like, shape = [n_samples] or [n_samples, n_outputs]
+            Target variable.
+
+        Returns
+        -------
+        estimator
+            The trained estimator
+
+        Notes
+        -----
+        This methods overloads the method of the parent class to allow for DummyClassifier instances in case of nodes
+        that only see one class. This is necessary, because other classifiers, such as LogisticRegression require
+        at least two classes.
+        """
+        if len(np.unique(y)) == 1 and self.dummy_classifier is not None:
+            cls = clone(self.dummy_classifier)
+            cls.fit(X, y)
+            return cls
+        else:
+            return super()._create_and_fit_estimator(X, y)
+
+    def fit(self, X, y):
+        self.classes_ = np.unique(y)
+
+        super().fit(X, y)
+
+
+def _map_columns(output_columns, input_columns, X_input, default_value=0):
+    """
+    Helper function that maps one 2-dimensional array to another by reordering columns and filling missing columns
+    with default values.
+
+
+    Parameters
+    ----------
+    output_columns: array-like, shape=(m1)
+        Columns of the output array. These can me class names or just numbers.
+    input_columns: array-like, shape=(m2)
+        Columns of the input array. These can me class names or just numbers. Datatype should be the same as of
+        `output_columns`. Typically (but not necessarily), `input_columns` is a subset of `output_columns`
+    X_input: array-like, shape=(n, m2)
+        The input data that should be mapped to the defined output columns
+    default_value
+        Value to fill into missing columns (i.e. columns that are not given in the input but expected in the output)
+
+    Returns
+    -------
+    X: array, shape=(n,m1)
+        The output matrix. This is done by padding the input data with default values in the missing columns.
+    Notes
+    -----
+    The intention of this function is to handle model tree classifiers where subtrees to not contain samples of
+    all classes (up to the case that a node only gets samples of one class). In this case, the output shape of
+    `predict_proba` contains too few columns. In order to merge the results from multiple leafs, this function
+    fills missing columns with default values.
+
+    """
+    # if output and input columns are the same, nothing has to be done:
+    if np.array_equiv(output_columns, input_columns):
+        return X_input
+
+    # Identify columns:
+    #       output columns at index o_idx corresponds to input columns at index i_idx
+    idx = np.searchsorted(output_columns, input_columns)
+    i_idx, = np.where(input_columns == output_columns[idx])
+    o_idx = idx[i_idx]
+
+    # Create result array
+    n_samples = np.shape(X_input)[0]
+    n_columns = len(output_columns)
+    X = np.full((n_samples, n_columns), default_value, dtype=X_input.dtype)
+
+    # Copy input data into the correct columns of X
+    X[:, o_idx] = X_input[:, i_idx]
+
+    return X
