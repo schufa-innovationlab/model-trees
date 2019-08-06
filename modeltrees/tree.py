@@ -238,6 +238,12 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
             n_left = splits
             n_right = n_samples - n_left
 
+            # Ignore all splits where one child has less than `min_samples_split` training samples
+            filter = np.minimum(n_left, n_right) >= self.min_samples_split
+            splits = splits[filter]
+            n_left = n_left[filter]
+            n_right = n_right[filter]
+
             # Compute the sum of gradients for the left side
             g_sum_left = g[s_idx, :].cumsum(axis=0)
             g_sum_left = g_sum_left[splits - 1, :]
