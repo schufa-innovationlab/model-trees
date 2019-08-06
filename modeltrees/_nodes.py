@@ -14,6 +14,7 @@
 
 import numpy as np
 
+
 class TreeNode:
     """
     A helper class to store the tree structure of a model tree.
@@ -102,16 +103,17 @@ class TreeNode:
                 # Get sample subset for child c
                 idx = child_idx == c
 
-                # Recursively map to leafs
-                leaf_idx_, leafs_ = self.children[c].map_to_leaf(X[idx])
+                if np.any(idx):
+                    # Recursively map to leafs
+                    leaf_idx_, leafs_ = self.children[c].map_to_leaf(X[idx])
 
-                # Include results into output leaf_idx
-                # Note that we need to shift the index to avoid return the same leaf index for different leafs.
-                shift = len(leafs)
-                leaf_idx[idx] = leaf_idx_ + shift
+                    # Include results into output leaf_idx
+                    # Note that we need to shift the index to avoid return the same leaf index for different leafs.
+                    shift = len(leafs)
+                    leaf_idx[idx] = leaf_idx_ + shift
 
-                # Append the new found leafs
-                leafs = leafs + leafs_
+                    # Append the new found leafs
+                    leafs = leafs + leafs_
 
             # Return results
             return leaf_idx, leafs
