@@ -12,6 +12,8 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+import numpy as np
+
 class TreeNode:
     """
     A helper class to store the tree structure of a model tree.
@@ -58,6 +60,61 @@ class TreeNode:
         self.estimator = estimator
         self.children = children
         self.split = split
+
+    def is_leaf(self):
+        """
+        Checks, if the node is a leaf node, i.e. no split is set.
+
+        Returns
+        -------
+        True, if the node is a leaf node.
+        """
+        return self.split is None
+
+    def map_to_leaf(self, X):
+        """
+        Maps input samples to leaf nodes by using split rules and the subtree structure
+
+        Parameters
+        ----------
+        X : array-like, shape = [n_samples, n_features]
+            Input Features of the samples
+
+        Returns
+        -------
+        leaf_idx: array-like, shape = [n_samples]
+            For each sample an index of the corresponding leaf node.
+        leafs: list
+            A list of leaf nodes. Positions correspond to the indices in `leaf_idx`
+
+        """
+
+        if self.is_leaf():
+            return np.zeros(np.shape(X)[0], dtype=int), [self]
+        else:
+            child_idx = self.split.map_to_children(X)
+            leaf_idx = -np.ones(child_idx.shape, dtype=int)
+
+            leafs = []
+
+            # Iterate over children
+            for c in range(len(self.children)):
+                # Get sample subset for child c
+                idx = child_idx == c
+
+                # Recursively map to leafs
+                leaf_idx_, leafs_ = self.children[c].map_to_leaf(X[idx])
+
+                # Include results into output leaf_idx
+                # Note that we need to shift the index to avoid return the same leaf index for different leafs.
+                shift = len(leafs)
+                leaf_idx[idx] = leaf_idx_ + shift
+
+                # Append the new found leafs
+                leafs = leafs + leafs_
+
+            # Return results
+            return leaf_idx, leafs
 
 
 class Split:
@@ -110,9 +167,26 @@ class Split:
 
         # Output depending in input
         if y is None:
-            return [X[split_filter, :], X[~split_filter, :]]
+            return [X[split_filter], X[~split_filter]]
         else:
             return [
-                (X[split_filter, :], y[split_filter]),  # Samples for the left subtree
-                (X[~split_filter, :], y[~split_filter])  # Samples for the right subtree
+                (X[split_filter], y[split_filter]),  # Samples for the left subtree
+                (X[~split_filter], y[~split_filter])  # Samples for the right subtree
             ]
+
+    def map_to_children(self, X):
+        """
+        Maps samples to child nodes. This is done based on the split feature and threshold
+
+        Parameters
+        ----------
+        X : array-like, shape = [n_samples, n_features]
+            Input Features of the samples
+
+        Returns
+        -------
+        child_idx: array-like, shape = [n_samples]
+            For each sample an index (0 for left child, 1 for right child).
+        """
+        child_idx = 1 - (X[:, self.split_feature] <= self.split_threshold)
+        return child_idx

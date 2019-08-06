@@ -268,3 +268,59 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
 
         return best_split, max_gain
 
+    def _apply_sample_wise_function_on_leafs(self, fct, X):
+        """
+        Helper function that applies a function on the leaf estimators and returns the recombined results.
+
+        This method is intended to avoid duplicate code for estimator methods such as
+        `predict`, `predict_proba`, `predict_log_proba` and `decision_function`.
+
+        Parameters
+        ----------
+        fct: callable
+            A function that takes two parameters: an estimator and a matrix of samples (see also parameter `X`)
+            The result must also be an array, where the first axis corresponds to samples.
+        X : array-like, shape = [n_samples, n_features]
+            Input Features of the training data
+
+        Returns
+        -------
+        output: array
+            The recombines results of the function calls on the leafs. The order of the input `X`is maintained.
+            The shape is (except for the sample-axis 0) the same as for the call on the leafs.
+        """
+        idx, leafs = self.root_.map_to_leaf(X)
+
+        results = [fct(leafs[i].estimator, X[idx == i])
+                   for i in range(len(leafs))]
+
+        # Get output shape of one leaf and extend it along axis 0
+        shape = list(np.shape(results[0]))
+        shape[0] = np.shape(X)[0]
+
+        # Create output array
+        dt = results[0].dtype
+        output = np.zeros(shape, dtype=dt)
+
+        # Copy leaf outputs into the finale output array
+        for i in range(len(leafs)):
+            output[idx == i] = results[i]
+
+        return output
+
+    def predict(self, X):
+        """
+        Predict class labels for samples in X.
+
+        Parameters
+        ----------
+        X : array-like, shape = [n_samples, n_features]
+            Input Features of the training data
+
+        Returns
+        -------
+        O : array
+            Prediction per sample
+        """
+        return self._apply_sample_wise_function_on_leafs(lambda estimator, X_: estimator.predict(X_), X)
+
