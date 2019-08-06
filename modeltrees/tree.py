@@ -22,7 +22,8 @@ References
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from sklearn.base import MetaEstimatorMixin, BaseEstimator, clone
+from sklearn.base import MetaEstimatorMixin, BaseEstimator, RegressorMixin, clone
+from sklearn.linear_model import LinearRegression
 from abc import ABCMeta, abstractmethod
 
 import numpy as np
@@ -342,4 +343,48 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
             Prediction per sample
         """
         return self._apply_sample_wise_function_on_leafs(lambda estimator, X_: estimator.predict(X_), X)
+
+
+class ModelTreeRegressor(BaseModelTree, RegressorMixin):
+    """
+    Model Tree implementation for regression problems.
+
+    This algorithm uses the gradient-based split criterion [1]_ to create the model tree structure.
+    Note that this criterion requires to compute gradients of the base estimators.
+
+    Parameters
+    ----------
+    base_estimator
+        Base estimator to be used in the nodes. This should be an scikit-learn compatible regressor.
+    max_depth : int (default = 3)
+        Maximal depth of the tree
+    min_samples_split : int (default = 10)
+        Minimal number of samples that go to each split
+    gradient_function
+        A function that computes the gradient of a model at a given point.
+        The gradient_function gets 3 parameters: a fitted model (see base_estimator),
+        the input matrix X and the target vector y.
+
+    Attributes
+    ----------
+    root_ : TreeNode
+        Root Node of the tree structure
+
+    References
+    ----------
+    .. [1] Broelemann, K. and Kasneci, G.,
+       "A Gradient-Based Split Criterion for Highly Accurate and Transparent Model Trees",
+       Proceedings of the International Joint Conference on Artificial Intelligence (IJCAI), 2019
+    """
+    def __init__(self,
+                 base_estimator=LinearRegression(),
+                 max_depth=3,
+                 min_samples_split=10,
+                 gradient_function=None):
+        super().__init__(
+            base_estimator=base_estimator,
+            max_depth=max_depth,
+            min_samples_split=min_samples_split,
+            gradient_function=gradient_function
+        )
 

@@ -28,7 +28,7 @@ References
 
 import numpy as np
 
-from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import LinearRegression, LogisticRegression
 
 
 def get_default_gradient_function(model):
@@ -57,14 +57,14 @@ def gradient_logistic_regression_cross_entropy(model, X, y):
         The model of which the gradient shall be computed.
         The model should already be fitted to some data (typically to the data of the parent node)
     X : array-like, shape = [n_samples, n_features]
-        Input Features of the training data
+        Input Features of the points at which the gradient should be computed
     y : array-like, shape = [n_samples] or [n_samples, n_outputs]
-        Target variable.
+        Target variable. Corresponds to the samples in `X`
 
     Returns
     -------
-    gradient: array-like, shape = [n_samples, n_parameters]
-        Gradient of the loss function with respect to the model parameters at the points defined by `X` and `y`
+    g: array-like, shape = [n_samples, n_parameters]
+        Gradient of the cross entropy loss with respect to the model parameters at the samples given by `X` and `y`
 
     Notes
     -----
@@ -82,18 +82,65 @@ def gradient_logistic_regression_cross_entropy(model, X, y):
 
     # Compute Gradient (see also [1])
     factor = model.predict_proba(X)[:, 1:2] - np.reshape(y, (-1, 1))
-    gradient = factor * X
+    g = factor * X
 
     if model.fit_intercept:
         # Append artificial intercept gradient
         n_intercept = np.prod(np.shape(model.intercept_))
         n_samples = np.shape(X)[0]
-        gradient = np.concatenate([gradient, factor * np.ones((n_samples, n_intercept))], axis=1)
+        g = np.concatenate([g, factor * np.ones((n_samples, n_intercept))], axis=1)
 
-    return gradient
+    return g
+
+
+def gradient_linear_regression_square_loss(model, X, y):
+    """
+    Computes the gradients of a logistic regression model with cross validation loss
+
+    Parameters
+    ----------
+    model : LinearRegression
+        The model of which the gradient shall be computed.
+        The model should already be fitted to some data (typically to the data of the parent node)
+    X : array-like, shape = [n_samples, n_features]
+        Input Features of the points at which the gradient should be computed
+    y : array-like, shape = [n_samples] or [n_samples, n_outputs]
+        Target variable. Corresponds to the samples in `X`
+
+    Returns
+    -------
+    g: array-like, shape = [n_samples, n_parameters]
+        Gradient of the square loss with respect to the model parameters at the samples given by `X` and `y`
+
+    Notes
+    -----
+    * The number of model parameters is equal to the number of features (if the intercept is not trainable) or
+      has one additional parameter (if the intercept is trainable)
+    * See [1]_ for the math behind it
+
+    """
+    # Prediction
+    y_ = model.predict(X)
+    # Residuals
+    r = y_ - y    # TODO: handle shapes (n) and (n,1) in y_and y
+    if len(r.shape) == 1:
+        r = np.reshape(r, (-1,1))
+
+    n_out = r.shape[1]
+    # Gradient by output
+    g = [r[:,o:o+1] * X for o in range(n_out)]
+    # Concatenate along parameter axis (axis = 1)
+    g = np.concatenate(g, axis=1)
+
+    if model.fit_intercept:
+        # Append intercept gradient: The intercept gradient equals to the residuals
+        g = np.concatenate([g, r], axis=1)
+
+    return g
 
 
 # Default gradients allow to use Model Trees without explicitly defining the gradient computation
 _DEFAULT_GRADIENTS = {
+    LinearRegression: gradient_linear_regression_square_loss,
     LogisticRegression: gradient_logistic_regression_cross_entropy
 }
