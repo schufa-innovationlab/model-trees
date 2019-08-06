@@ -304,6 +304,10 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
             The recombines results of the function calls on the leafs. The order of the input `X`is maintained.
             The shape is (except for the sample-axis 0) the same as for the call on the leafs.
         """
+        # Convert to numpy array
+        X = np.asarray(X)
+
+        # Compute results on leafs
         idx, leafs = self.root_.map_to_leaf(X)
 
         results = [fct(leafs[i].estimator, X[idx == i])
