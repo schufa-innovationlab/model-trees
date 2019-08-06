@@ -152,8 +152,7 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
         """
 
         # Create and train base estimator
-        estimator = clone(self.base_estimator)
-        estimator.fit(X, y)
+        estimator = self._create_and_fit_estimator(X, y)
 
         # Only split, if the maximal depth is not reached, yet
         if depth < self.max_depth:
@@ -180,6 +179,26 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
         else:
             # Create Leave node if maximal depth is reached
             return TreeNode(depth=depth, estimator=estimator)
+
+    def _create_and_fit_estimator(self, X, y):
+        """
+        Creates a new estimator for a node and trains it with the provided data.
+
+        Parameters
+        ----------
+        X : array-like, shape = [n_samples, n_features]
+            Input Features of the training data
+        y : array-like, shape = [n_samples] or [n_samples, n_outputs]
+            Target variable.
+
+        Returns
+        -------
+        estimator
+            The trained estimator
+        """
+        estimator = clone(self.base_estimator)
+        estimator.fit(X, y)
+        return estimator
 
     def _find_split(self, model, X, y):
         """
