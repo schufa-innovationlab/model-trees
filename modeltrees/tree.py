@@ -158,20 +158,24 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
         # Only split, if the maximal depth is not reached, yet
         if depth < self.max_depth:
             # Find best split
-            split, gain = self._find_split(estimator, X, y)
+            try:
+                split, gain = self._find_split(estimator, X, y)
 
-            # Split trainings data and create child nodes from the
-            child_data = split._apply_split(X, y)
+                # Split trainings data and create child nodes from the
+                child_data = split._apply_split(X, y)
 
-            # (Recursively) create child nodes
-            children = [self._create_tree_structure(cX, cy, depth=depth + 1) for cX, cy in child_data]
+                # (Recursively) create child nodes
+                children = [self._create_tree_structure(cX, cy, depth=depth + 1) for cX, cy in child_data]
 
-            return TreeNode(
-                depth=depth,
-                estimator=estimator,
-                children=children,
-                split=split
-            )
+                return TreeNode(
+                    depth=depth,
+                    estimator=estimator,
+                    children=children,
+                    split=split
+                )
+            except:
+                # In Case of errors: Create Leave node
+                return TreeNode(depth=depth, estimator=estimator)
 
         else:
             # Create Leave node if maximal depth is reached
