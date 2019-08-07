@@ -26,6 +26,12 @@ import numpy as np
 from ._nodes import TreeNode, Split
 from ._gradients import get_default_gradient_function
 
+# Parameter Constants
+_CRITERION_GRADIENT = "gradient"
+_CRITERION_GRADIENT_RENORM = "gradient-renorm-z"
+
+_SUPPORTED_CRITERIA = {_CRITERION_GRADIENT, _CRITERION_GRADIENT_RENORM}
+
 
 class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
     """
@@ -42,6 +48,7 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
     @abstractmethod
     def __init__(self,
                  base_estimator,
+                 criterion="gradient",
                  max_depth=3,
                  min_samples_split=10,
                  gradient_function=None):
@@ -51,6 +58,8 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
         ----------
         base_estimator:
             Base estimator to be used in the nodes
+        criterion : str
+            Split Criterion. Supported values are: `"gradient"` and `"gradient-renorm-z"`
         max_depth : int (default = 3)
             Maximal depth of the tree
         min_samples_split : int (default = 10)
@@ -61,6 +70,7 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
             the input matrix X and the target vector y.
         """
         self.base_estimator = base_estimator
+        self.criterion = criterion
         self.max_depth = max_depth
         self.min_samples_split = min_samples_split
         self.gradient_function = gradient_function
@@ -100,6 +110,11 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
         -------
 
         """
+        # Check criterion
+        if self.criterion not in _SUPPORTED_CRITERIA:
+            msg = f"Invalid Split Criterion. Got '{self.criterion}'. Valid values are {_SUPPORTED_CRITERIA}"
+            raise ValueError(msg)
+
         # Check gradient function and try to get default
         if self.gradient_function is None:
             self.gf_ = get_default_gradient_function(self.base_estimator)
@@ -355,6 +370,8 @@ class ModelTreeRegressor(BaseModelTree, RegressorMixin):
     ----------
     base_estimator
         Base estimator to be used in the nodes. This should be an scikit-learn compatible regressor.
+    criterion : str
+        Split Criterion. Supported values are: `"gradient"` and `"gradient-renorm-z"`
     max_depth : int (default = 3)
         Maximal depth of the tree
     min_samples_split : int (default = 10)
@@ -378,11 +395,13 @@ class ModelTreeRegressor(BaseModelTree, RegressorMixin):
 
     def __init__(self,
                  base_estimator=LinearRegression(),
+                 criterion="gradient",
                  max_depth=3,
                  min_samples_split=10,
                  gradient_function=None):
         super().__init__(
             base_estimator=base_estimator,
+            criterion=criterion,
             max_depth=max_depth,
             min_samples_split=min_samples_split,
             gradient_function=gradient_function
@@ -400,6 +419,8 @@ class ModelTreeClassifier(BaseModelTree, ClassifierMixin):
     ----------
     base_estimator
         Base estimator to be used in the nodes. This should be an scikit-learn compatible regressor.
+    criterion : str
+        Split Criterion. Supported values are: `"gradient"` and `"gradient-renorm-z"`
     max_depth : int (default = 3)
         Maximal depth of the tree
     min_samples_split : int (default = 10)
@@ -427,12 +448,14 @@ class ModelTreeClassifier(BaseModelTree, ClassifierMixin):
 
     def __init__(self,
                  base_estimator=LogisticRegression(solver="liblinear"),
+                 criterion="gradient",
                  max_depth=3,
                  min_samples_split=10,
                  gradient_function=None,
                  dummy_classifier=DummyClassifier(strategy="prior")):
         super().__init__(
             base_estimator=base_estimator,
+            criterion=criterion,
             max_depth=max_depth,
             min_samples_split=min_samples_split,
             gradient_function=gradient_function)
