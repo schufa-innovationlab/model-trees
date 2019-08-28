@@ -20,11 +20,12 @@ from sklearn.base import MetaEstimatorMixin, BaseEstimator, RegressorMixin, Clas
 from sklearn.linear_model import LinearRegression, LogisticRegression
 from sklearn.dummy import DummyClassifier
 from abc import ABCMeta, abstractmethod
+import warnings
 
 import numpy as np
 
 from ._nodes import TreeNode, Split
-from ._gradients import get_default_gradient_function
+from ._gradients import get_default_gradient_function, get_default_renormalization_function
 
 # Parameter Constants
 _CRITERION_GRADIENT = "gradient"
@@ -54,7 +55,8 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
                  criterion="gradient",
                  max_depth=3,
                  min_samples_split=10,
-                 gradient_function=None):
+                 gradient_function=None,
+                 renorm_function=None):
         """
 
         Parameters
@@ -67,16 +69,24 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
             Maximal depth of the tree
         min_samples_split : int (default = 10)
             Minimal number of samples that go to each split
-        gradient_function
-            A function that computes the gradient of a model at a given point.
+        gradient_function : callable
+            A function that computes the gradient of a model with respect to the model parameters at given points.
             The gradient_function gets 3 parameters: a fitted model (see base_estimator),
             the input matrix X and the target vector y.
+        renorm_function : callable
+            A function that allows to renormalize gradients of a model.
+            The renorm_function gets 4 parameters: a fitted model (see base_estimator),
+            the gradient matrix g, a scale factor and a shift vector.
+            *The renormalization function must be set based on the `gradient_function`. Unsuitable functions might
+            result in bad results, exceptions and unexpected outcomes.*
+            **Note: Only set this parameter if you use a custom gradient function and know what you are doing.**
         """
         self.base_estimator = base_estimator
         self.criterion = criterion
         self.max_depth = max_depth
         self.min_samples_split = min_samples_split
         self.gradient_function = gradient_function
+        self.renorm_function = renorm_function
 
     def fit(self, X, y):
         """
@@ -123,6 +133,18 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
             self.gf_ = get_default_gradient_function(self.base_estimator)
         else:
             self.gf_ = self.gradient_function
+
+        # Check renormalization function and try to get default
+        if self.renorm_function is None:
+            self.rnf_ = get_default_renormalization_function(self.base_estimator)
+        else:
+            if self.gradient_function is None:
+                warnings.warn(
+                    "Using a custom renormalization function with a standard gradient function will likely result in "
+                    "undesired outcomes.",
+                    UserWarning
+                )
+            self.rnf_ = self.renorm_function
 
     def _validate_training_data(self, X, y):
         """
@@ -286,7 +308,6 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
 
             # Additional code needed for renormalization
             if self.criterion == _CRITERION_GRADIENT_RENORM:
-                # TODO: this only works for simple cases. We need to generalize it
                 # Renormalization with z-transform:
                 #   compute mean and variance for each potential left and right child (i.e. for each split)
 
@@ -333,8 +354,8 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
                 mu_r = mu_r + mu
 
                 # Renormalize gradients
-                g_sum_left[:, :-1] = g_sum_left[:, :-1] / sigma_l - g_sum_left[:, -1:] * mu_l / sigma_l
-                g_sum_right[:, :-1] = g_sum_right[:, :-1] / sigma_r - g_sum_right[:, -1:] * mu_r / sigma_r
+                g_sum_left = self.rnf_(model, g_sum_left, 1/sigma_l, -mu_l/sigma_l)
+                g_sum_right = self.rnf_(model, g_sum_right, 1/sigma_r, -mu_r/sigma_r)
 
             # Compute the Gain (see Eq. (6) in [1])
             gain = np.power(g_sum_left, 2).sum(axis=1) / n_left + np.power(g_sum_right, 2).sum(axis=1) / n_right
@@ -432,9 +453,16 @@ class ModelTreeRegressor(BaseModelTree, RegressorMixin):
     min_samples_split : int (default = 10)
         Minimal number of samples that go to each split
     gradient_function : callable
-        A function that computes the gradient of a model at a given point.
+        A function that computes the gradient of a model with respect to the model parameters at given points.
         The gradient_function gets 3 parameters: a fitted model (see base_estimator),
         the input matrix X and the target vector y.
+    renorm_function : callable
+        A function that allows to renormalize gradients of a model.
+        The renorm_function gets 4 parameters: a fitted model (see base_estimator),
+        the gradient matrix g, a scale factor and a shift vector.
+        *The renormalization function must be set based on the `gradient_function`. Unsuitable functions might
+        result in bad results, exceptions and unexpected outcomes.*
+        **Note: Only set this parameter if you use a custom gradient function and know what you are doing.**
 
     Attributes
     ----------
@@ -453,13 +481,15 @@ class ModelTreeRegressor(BaseModelTree, RegressorMixin):
                  criterion="gradient",
                  max_depth=3,
                  min_samples_split=10,
-                 gradient_function=None):
+                 gradient_function=None,
+                 renorm_function=None):
         super().__init__(
             base_estimator=base_estimator,
             criterion=criterion,
             max_depth=max_depth,
             min_samples_split=min_samples_split,
-            gradient_function=gradient_function
+            gradient_function=gradient_function,
+            renorm_function=renorm_function
         )
 
 
@@ -481,9 +511,16 @@ class ModelTreeClassifier(BaseModelTree, ClassifierMixin):
     min_samples_split : int (default = 10)
         Minimal number of samples that go to each split
     gradient_function : callable
-        A function that computes the gradient of a model at a given point.
+        A function that computes the gradient of a model with respect to the model parameters at given points.
         The gradient_function gets 3 parameters: a fitted model (see base_estimator),
         the input matrix X and the target vector y.
+    renorm_function : callable
+        A function that allows to renormalize gradients of a model.
+        The renorm_function gets 4 parameters: a fitted model (see base_estimator),
+        the gradient matrix g, a scale factor and a shift vector.
+        *The renormalization function must be set based on the `gradient_function`. Unsuitable functions might
+        result in bad results, exceptions and unexpected outcomes.*
+        **Note: Only set this parameter if you use a custom gradient function and know what you are doing.**
     dummy_classifier
         Base estimator that is used in nodes where all training samples belong to one class.
 
@@ -507,13 +544,15 @@ class ModelTreeClassifier(BaseModelTree, ClassifierMixin):
                  max_depth=3,
                  min_samples_split=10,
                  gradient_function=None,
+                 renorm_function=None,
                  dummy_classifier=DummyClassifier(strategy="prior")):
         super().__init__(
             base_estimator=base_estimator,
             criterion=criterion,
             max_depth=max_depth,
             min_samples_split=min_samples_split,
-            gradient_function=gradient_function)
+            gradient_function=gradient_function,
+            renorm_function=renorm_function)
         self.dummy_classifier = dummy_classifier
 
     def predict_proba(self, X):
