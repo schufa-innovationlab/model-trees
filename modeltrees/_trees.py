@@ -259,6 +259,10 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
             n_left = n_left[filter]
             n_right = n_right[filter]
 
+            if len(splits) < 1:
+                # No split found after filtering
+                continue
+
             # Compute the sum of gradients for the left side
             g_sum_left = g[s_idx, :].cumsum(axis=0)
             g_sum_left = g_sum_left[splits - 1, :]
