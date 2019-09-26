@@ -7,7 +7,7 @@ The model trees use the gradient-based split criterion from [[1]](#References)
 ## Installation
 The modeltrees package can directly be installed from GitHub using pip:
 ```shell scrip
-pip install -e git://github.com/schufa-innovationlab/model-trees.git@master
+pip install https://github.com/schufa-innovationlab/model-trees/archive/master.zip
 ```
 
 Now you are ready to start, e.g. with our [introductory example](#introductory-example)
