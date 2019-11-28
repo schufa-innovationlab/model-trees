@@ -133,3 +133,7 @@ dmypy.json
 # PyCharm
 # ------------------------------------------------------------------------
 .idea
+
+
+# Data folders (data ist not stored in the repository)
+**/data/**

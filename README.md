@@ -44,6 +44,10 @@ p = mt.predict([[1, 2, 3]])
 print(f"Prediction: {p}")
 ```
 
+### Further examples
+There is an `examples` folder that contains further examples and evaluations.
+See the [corresponding readme](examples/README.md) for further details and a list of examples.
+
 ## References
 [1] Broelemann, K. and Kasneci, G.;
 A Gradient-Based Split Criterion for Highly Accurate and Transparent Model Trees;
