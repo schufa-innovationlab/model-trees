@@ -346,11 +346,8 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
                 X2cs_r = X2cs_l[-1:, :] - X2cs_l
 
                 # Compute standard deviation of left and right side for all splits
-                sigma_l = np.sqrt(X2cs_l[splits - 1, :] / (n_l - 1) - np.power(mu_l, 2))
-                sigma_r = np.sqrt(X2cs_r[splits - 1, :] / (n_r - 1) - np.power(mu_r, 2))
-
-                sigma_l = np.maximum(sigma_l, _EPS)
-                sigma_r = np.maximum(sigma_r, _EPS)
+                sigma_l = np.sqrt(np.maximum(X2cs_l[splits - 1, :] / (n_l - 1) - np.power(mu_l, 2), _EPS**2))
+                sigma_r = np.sqrt(np.maximum(X2cs_r[splits - 1, :] / (n_r - 1) - np.power(mu_r, 2), _EPS**2))
 
                 # Correct for previous shift (it was only done on X, not on the gradients)
                 # NOTE: This needs to be done AFTER computing sigma with shifted values.
