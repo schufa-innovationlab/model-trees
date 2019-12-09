@@ -15,4 +15,7 @@ So please ensure that you have a working internet connection as long as datasets
 ## List of examples
 1. __Comparing Regressors:__ 
 This notebook compares different regression models on multiple datasets
-and prints the results in tablar form. [[Link](Comparing_Regressors.ipynb)]
+and prints the results in tabular form. [[Link](Comparing_Regressors.ipynb)]
+2. __Comparing Classifiers:__ 
+This notebook compares different classification models on multiple datasets
+and prints the results in tabular form. [[Link](Comparing_Classifiers.ipynb)]
