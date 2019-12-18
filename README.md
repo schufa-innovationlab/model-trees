@@ -40,8 +40,13 @@ y = np.matmul(X, [[-1], [2], [1.5]]) + np.random.randn(10000, 1) * 0.2
 mt = ModelTreeRegressor()
 mt.fit(X,y)
 
-mt.predict([[1, 2, 3]])
+p = mt.predict([[1, 2, 3]])
+print(f"Prediction: {p}")
 ```
+
+### Further examples
+There is an `examples` folder that contains further examples and evaluations.
+See the [corresponding readme](examples/README.md) for further details and a list of examples.
 
 ## References
 [1] Broelemann, K. and Kasneci, G.;
