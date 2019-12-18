@@ -193,9 +193,10 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
         # Only split, if the maximal depth is not reached, yet
         if depth < self.max_depth:
             # Find best split
-            try:
-                split, gain = self._find_split(estimator, X, y)
+            split, gain = self._find_split(estimator, X, y)
 
+            # Did the algorithm find a split?
+            if split is not None:
                 # Split trainings data and create child nodes from the
                 child_data = split._apply_split(X, y)
 
@@ -208,12 +209,11 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
                     children=children,
                     split=split
                 )
-            except:
-                # In Case of errors: Create Leave node
+            else:
+                # If not split was found, return es leaf node
                 return TreeNode(depth=depth, estimator=estimator)
-
         else:
-            # Create Leave node if maximal depth is reached
+            # Create leaf node if maximal depth is reached
             return TreeNode(depth=depth, estimator=estimator)
 
     def _create_and_fit_estimator(self, X, y):
@@ -346,11 +346,8 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
                 X2cs_r = X2cs_l[-1:, :] - X2cs_l
 
                 # Compute standard deviation of left and right side for all splits
-                sigma_l = np.sqrt(X2cs_l[splits - 1, :] / (n_l - 1) - np.power(mu_l, 2))
-                sigma_r = np.sqrt(X2cs_r[splits - 1, :] / (n_r - 1) - np.power(mu_r, 2))
-
-                sigma_l = np.maximum(sigma_l, _EPS)
-                sigma_r = np.maximum(sigma_r, _EPS)
+                sigma_l = np.sqrt(np.maximum(X2cs_l[splits - 1, :] / (n_l - 1) - np.power(mu_l, 2), _EPS**2))
+                sigma_r = np.sqrt(np.maximum(X2cs_r[splits - 1, :] / (n_r - 1) - np.power(mu_r, 2), _EPS**2))
 
                 # Correct for previous shift (it was only done on X, not on the gradients)
                 # NOTE: This needs to be done AFTER computing sigma with shifted values.
