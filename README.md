@@ -12,6 +12,12 @@ pip install https://github.com/schufa-innovationlab/model-trees/archive/master.z
 
 Now you are ready to start, e.g. with our [introductory example](#introductory-example)
 
+### Development Version
+The modeltrees package is still under development. You can install the current development version via
+```shell scrip
+pip install https://github.com/schufa-innovationlab/model-trees/archive/dev.zip
+```
+
 ### Alternative ways
 There might be reasons not to use pip with GitHub, e.g. because some
 proxy does not allows to connect to GitHub, or pip is just not
@@ -51,7 +57,7 @@ See the [corresponding readme](examples/README.md) for further details and a lis
 ## References
 [1] Broelemann, K. and Kasneci, G.;
 A Gradient-Based Split Criterion for Highly Accurate and Transparent Model Trees;
-International Joint Conference on Artificial Intelligence (IJCAI) 2019; [pdf](https://arxiv.org/abs/1809.09703)
+International Joint Conference on Artificial Intelligence (IJCAI) 2019; [pdf](https://www.ijcai.org/proceedings/2019/0281.pdf)
 <details><summary>Bibtex</summary>
 <p>
 
