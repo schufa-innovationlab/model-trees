@@ -190,8 +190,12 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
         # Create and train base estimator
         estimator = self._create_and_fit_estimator(X, y)
 
-        # Only split, if the maximal depth is not reached, yet
-        if depth < self.max_depth:
+        # Only split, if this node is not a leaf node. A node is a leaf node, if
+        #   - The maximal depth is reached
+        #   - There are not enough training samples for a split
+        #   - Other requirements, which can be defined in subclasses, are not met
+        is_leaf = self._is_leaf_node(depth, X, y, estimator)
+        if not is_leaf:
             # Find best split
             split, gain = self._find_split(estimator, X, y)
 
@@ -213,8 +217,33 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
                 # If not split was found, return es leaf node
                 return TreeNode(depth=depth, estimator=estimator)
         else:
-            # Create leaf node if maximal depth is reached
+            # Create leaf node
             return TreeNode(depth=depth, estimator=estimator)
+
+    def _is_leaf_node(self, depth, X, y, model):
+        """
+        Checks, if a node is a leaf node.
+        This is the case, if
+        - The maximal depth is reached
+        - There are too few training samples
+
+        Parameters
+        ----------
+        depth: int
+            The current depth
+        X : array-like, shape = [n_samples, n_features]
+            Input Features of the training data
+        y : array-like, shape = [n_samples] or [n_samples, n_outputs]
+            Target variable.
+        model
+            The trained weak predictive Model for this node
+
+        Returns
+        -------
+        bool
+            True, iff this is a leaf node and no further split shall be performed
+        """
+        return (depth >= self.max_depth) or (X.shape[0] < self.min_samples_split * 2)
 
     def _create_and_fit_estimator(self, X, y):
         """
@@ -644,6 +673,41 @@ class ModelTreeClassifier(BaseModelTree, ClassifierMixin):
             return cls
         else:
             return super()._create_and_fit_estimator(X, y)
+
+    def _is_leaf_node(self, depth, X, y, model):
+        """
+        Checks, if a node is a leaf node.
+        This is the case, if
+        - The maximal depth is reached
+        - There are too few training samples
+        - There is only one class represented in the training data
+
+        Parameters
+        ----------
+        depth: int
+            The current depth
+        X : array-like, shape = [n_samples, n_features]
+            Input Features of the training data
+        y : array-like, shape = [n_samples] or [n_samples, n_outputs]
+            Target variable.
+        model
+            The trained weak predictive Model for this node
+
+        Returns
+        -------
+        bool
+            True, iff this is a leaf node and no further split shall be performed
+
+        Notes
+        -----
+        This methods extends the method of the parent class by adding a third constraint (more than one class) for splits.
+        """
+        # Check third constraint
+        if len(np.unique(y)) == 1:
+            return True
+
+        # Otherwise call parent method
+        return super()._is_leaf_node(depth, X, y, model)
 
     def fit(self, X, y):
         self.classes_ = np.unique(y)
