@@ -56,13 +56,14 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
                  gradient_function=None,
                  renorm_function=None):
         """
-
         Parameters
         ----------
         base_estimator:
             Base estimator to be used in the nodes
         criterion : str
             Split Criterion. Supported values are: `"gradient"` and `"gradient-renorm-z"`
+            It is also possible to provide a function that takes four arguments (X, y, weak model, model-tree) and
+            returns a split object and the approximated gain
         max_depth : int (default = 3)
             Maximal depth of the tree
         min_samples_split : int (default = 10)
@@ -122,11 +123,16 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
 
         """
         # Check criterion
-        if self.criterion not in _SUPPORTED_CRITERIA:
-            msg = f"Invalid Split Criterion. Got '{self.criterion}'. Valid values are {_SUPPORTED_CRITERIA}"
-            raise ValueError(msg)
-        is_renormalizing = self.criterion == _CRITERION_GRADIENT_RENORM
-        self.criterion_ = criteria.GradientSplitCriterion(is_renormalizing=is_renormalizing)
+        if callable(self.criterion):
+            # It is possible to provide a callable as criterion
+            self.criterion_ = self.criterion
+        else:
+            # Some predefined criteria can be represented by strings
+            if self.criterion not in _SUPPORTED_CRITERIA:
+                msg = f"Invalid Split Criterion. Got '{self.criterion}'. Valid values are {_SUPPORTED_CRITERIA} and functions"
+                raise ValueError(msg)
+            is_renormalizing = self.criterion == _CRITERION_GRADIENT_RENORM
+            self.criterion_ = criteria.GradientSplitCriterion(is_renormalizing=is_renormalizing)
 
         # Check gradient function and try to get default
         if self.gradient_function is None:
@@ -197,7 +203,7 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
         is_leaf = self._is_leaf_node(depth, X, y, estimator)
         if not is_leaf:
             # Find best split
-            split, gain = self.criterion_.find_best_split(X, y, estimator, self)
+            split, gain = self.criterion_(X, y, estimator, self)
 
             # Did the algorithm find a split?
             if split is not None:

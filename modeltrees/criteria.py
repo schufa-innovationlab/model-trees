@@ -31,7 +31,34 @@ class BaseSplitCriterion(metaclass=ABCMeta):
     """
     Base Class for split criteria.
     """
-    
+    def __call__(self, X, y, model, mt):
+        """
+        Finds the best split point for a tree node based on the training data.
+
+        Parameters
+        ----------
+        X : array-like, shape = [n_samples, n_features]
+            Input Features of the training data
+        y : array-like, shape = [n_samples] or [n_samples, n_outputs]
+            Target variable.
+        model
+            Weak Model trained on all samples of the current node
+        mt
+            Model Tree for which the split criterion is used
+        Returns
+        -------
+        split: Split
+            The new split. This can be used to grow the model tree
+        gain:
+            The approximated gain by using the split.
+
+        Warnings
+        --------
+        The class and this method are still under development and they might undergo heavy change in the future.
+
+        """
+        return self.find_best_split(X, y, model, mt)
+
     @abstractmethod
     def find_best_split(self, X, y, model, mt):
         """
