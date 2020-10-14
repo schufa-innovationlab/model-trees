@@ -332,16 +332,6 @@ class GradientSplitCriterion(BaseSplitCriterion):
        Proceedings of the International Joint Conference on Artificial Intelligence (IJCAI), 2019
     """
 
-    def __init__(self, is_renormalizing):
-        """
-        Parameters
-        ----------
-        is_renormalizing: bool
-            A flag that indicates whether a renormalization shall be performed
-
-        """
-        self.is_renormalizing = is_renormalizing
-
     def _precompute_splits(self, X, y, estimator, mt):
         """
         Precomputes the gradients for each sample
@@ -424,58 +414,64 @@ class GradientSplitCriterion(BaseSplitCriterion):
         # Compute the sum of gradients for the right side
         g_sum_right = g_sum - g_sum_left
 
-        # Additional code needed for renormalization
-        if self.is_renormalizing:
-            # Renormalization with z-transform:
-            #   compute mean and variance for each potential left and right child (i.e. for each split)
-
-            # For computational stability.
-            # See:
-            #   https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Computing_shifted_data
-            #   with K = mu
-
-            # Total mean as row vector (for shifting the input)
-            mu = np.reshape(np.mean(X, axis=0), (1, -1))
-
-            # reshape for broadcasting purposes
-            n_l = np.reshape(n_left, (-1, 1))
-            n_r = np.reshape(n_right, (-1, 1))
-
-            # Reorder and shift X to efficiently compute variance and mean
-            Xrs = X[sort_idx] - mu
-
-            # Compute cumulative sum
-            #   (i.e. for each split the sum of features of samples that go to the left side)
-            Xcs_l = Xrs.cumsum(axis=0)
-
-            # Compute the corresponding sums for the right side:
-            Xcs_r = Xcs_l[-1:, :] - Xcs_l  # here Xcs_l[-1:,:] is the sum of all samples
-
-            # Compute mean of left and right side for all splits
-            mu_l = Xcs_l[splits - 1, :] / n_l
-            mu_r = Xcs_r[splits - 1, :] / n_r
-
-            # Equivalently, compute the sum of the squares (as preparation for the variance computation)
-            X2cs_l = np.power(Xrs, 2).cumsum(axis=0)
-            X2cs_r = X2cs_l[-1:, :] - X2cs_l
-
-            # Compute standard deviation of left and right side for all splits
-            sigma_l = np.sqrt(np.maximum(X2cs_l[splits - 1, :] / (n_l - 1) - np.power(mu_l, 2), _EPS ** 2))
-            sigma_r = np.sqrt(np.maximum(X2cs_r[splits - 1, :] / (n_r - 1) - np.power(mu_r, 2), _EPS ** 2))
-
-            # Correct for previous shift (it was only done on X, not on the gradients)
-            # NOTE: This needs to be done AFTER computing sigma with shifted values.
-            mu_l = mu_l + mu
-            mu_r = mu_r + mu
-
-            # Renormalize gradients
-            g_sum_left = mt.rnf_(estimator, g_sum_left, 1 / sigma_l, -mu_l / sigma_l)
-            g_sum_right = mt.rnf_(estimator, g_sum_right, 1 / sigma_r, -mu_r / sigma_r)
+        # Renormalize Gradients (if renormalization is implemented
+        g_sum_left, g_sum_right = self._renormalize_gradients(X, estimator, g_sum_left, g_sum_right, mt, n_left, n_right, sort_idx, splits)
 
         # Compute the Gain (see Eq. (6) in [1])
         gain = np.power(g_sum_left, 2).sum(axis=1) / n_left + np.power(g_sum_right, 2).sum(axis=1) / n_right
 
         return gain
+
+    def _renormalize_gradients(self, X, estimator, g_sum_left, g_sum_right, mt, n_left, n_right, sort_idx, splits):
+        return g_sum_left, g_sum_right
+
+
+class ZRenormGradientSplitCriterion(GradientSplitCriterion):
+    def _renormalize_gradients(self, X, estimator, g_sum_left, g_sum_right, mt, n_left, n_right, sort_idx, splits):
+        # Renormalization with z-transform:
+        #   compute mean and variance for each potential left and right child (i.e. for each split)
+        # For computational stability.
+        # See:
+        #   https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Computing_shifted_data
+        #   with K = mu
+        # Total mean as row vector (for shifting the input)
+        mu = np.reshape(np.mean(X, axis=0), (1, -1))
+
+        # reshape for broadcasting purposes
+        n_l = np.reshape(n_left, (-1, 1))
+        n_r = np.reshape(n_right, (-1, 1))
+
+        # Reorder and shift X to efficiently compute variance and mean
+        Xrs = X[sort_idx] - mu
+
+        # Compute cumulative sum
+        #   (i.e. for each split the sum of features of samples that go to the left side)
+        Xcs_l = Xrs.cumsum(axis=0)
+        # Compute the corresponding sums for the right side:
+        Xcs_r = Xcs_l[-1:, :] - Xcs_l  # here Xcs_l[-1:,:] is the sum of all samples
+
+        # Compute mean of left and right side for all splits
+        mu_l = Xcs_l[splits - 1, :] / n_l
+        mu_r = Xcs_r[splits - 1, :] / n_r
+
+        # Equivalently, compute the sum of the squares (as preparation for the variance computation)
+        X2cs_l = np.power(Xrs, 2).cumsum(axis=0)
+        X2cs_r = X2cs_l[-1:, :] - X2cs_l
+
+        # Compute standard deviation of left and right side for all splits
+        sigma_l = np.sqrt(np.maximum(X2cs_l[splits - 1, :] / (n_l - 1) - np.power(mu_l, 2), _EPS ** 2))
+        sigma_r = np.sqrt(np.maximum(X2cs_r[splits - 1, :] / (n_r - 1) - np.power(mu_r, 2), _EPS ** 2))
+
+        # Correct for previous shift (it was only done on X, not on the gradients)
+        # NOTE: This needs to be done AFTER computing sigma with shifted values.
+        mu_l = mu_l + mu
+        mu_r = mu_r + mu
+
+        # Renormalize gradients
+        g_sum_left = mt.rnf_(estimator, g_sum_left, 1 / sigma_l, -mu_l / sigma_l)
+        g_sum_right = mt.rnf_(estimator, g_sum_right, 1 / sigma_r, -mu_r / sigma_r)
+
+        return g_sum_left, g_sum_right
 
 
 class SumOfSquareErrorSplitCriterion(BaseSplitCriterion):

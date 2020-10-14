@@ -131,8 +131,10 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
             if self.criterion not in _SUPPORTED_CRITERIA:
                 msg = f"Invalid Split Criterion. Got '{self.criterion}'. Valid values are {_SUPPORTED_CRITERIA} and functions"
                 raise ValueError(msg)
-            is_renormalizing = self.criterion == _CRITERION_GRADIENT_RENORM
-            self.criterion_ = criteria.GradientSplitCriterion(is_renormalizing=is_renormalizing)
+            if self.criterion == _CRITERION_GRADIENT_RENORM:
+                self.criterion_ = criteria.ZRenormGradientSplitCriterion()
+            else:
+                self.criterion_ = criteria.GradientSplitCriterion()
 
         # Check gradient function and try to get default
         if self.gradient_function is None:
