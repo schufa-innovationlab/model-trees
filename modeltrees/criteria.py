@@ -21,6 +21,7 @@ from ._nodes import Split
 
 import warnings
 import numpy as np
+from scipy.stats import entropy
 
 
 # Algorithm constants
@@ -473,5 +474,155 @@ class GradientSplitCriterion(BaseSplitCriterion):
 
         # Compute the Gain (see Eq. (6) in [1])
         gain = np.power(g_sum_left, 2).sum(axis=1) / n_left + np.power(g_sum_right, 2).sum(axis=1) / n_right
+
+        return gain
+
+
+class SumOfSquareErrorSplitCriterion(BaseSplitCriterion):
+    """
+    Implementation of the typical regression tree split criterion.
+    For each split candidate, the reduction of the sum of square errors is considers.
+
+    Notes
+    -----
+    The sum of square error criterion is meant to be used with regression trees.
+    """
+    def _compute_split_gain_by_feature(self, X, y, feature_id, estimator, mt, n_left, n_right, sort_idx, splits, *args):
+        """
+        This method computes an approximation of the gain using the gradient split criterion.
+        The computation is done for each split point candidate along one feature-axis.
+
+        Parameters
+        ----------
+        X : array-like, shape = [n_samples, n_features]
+            Input Features of the training data
+        y : array-like, shape = [n_samples] or [n_samples, n_outputs]
+            Target variable.
+        feature_id : int
+            ID of the feature, i.e. splitting along ``X[:,feature_id]``
+        estimator
+            Weak estimator trained on `X` and `y`
+        mt
+            Model Tree Object
+        n_left: array-like
+            Contains each split candidate the number of samples for the left child
+        n_right: array-like
+            Contains each split candidate the number of samples for the right child
+        sort_idx: array-like
+            Permutation to order X and y according to the currently analysed axis
+        splits: array-like
+            Zero-based index of the split candidates.
+            A split candidate (with index j) maps samples ``sort_idx[:splits[j]]`` to the left and
+            samples ``sort_idx[splits[j]:]`` to the right child node
+
+        Returns
+        -------
+        gain: array-like
+            The approximate gain per split candidate
+
+        Warnings
+        --------
+        The class and this method are still under development and it might undergo heavy change in the future.
+        """
+        # Reshape y, if necessary
+        y = np.reshape(y, (-1))
+        y = y - np.mean(y)
+
+        n = len(y)
+
+        # Total sum of y
+        ys = y.sum()
+
+        # Cumulative sum of y
+        ycs_l = y[sort_idx].cumsum()
+        ycs_r = ys - ycs_l
+
+        # Cumulative sum of square y
+        y2cs_l = np.power(y[sort_idx],2).cumsum()
+        y2cs_r = y2cs_l[-1] - y2cs_l
+
+        # Compute sum of square error without split
+        sse = y2cs_l[-1] - n * np.power(ycs_l[-1]/n,2)
+
+        # Compute sum of square error on the children
+        sse_l = y2cs_l[splits] - n_left * np.power(ycs_l[splits] / n_left, 2)
+        sse_r = y2cs_r[splits] - n_right * np.power(ycs_r[splits] / n_right, 2)
+
+        # And the gain
+        gain = sse - sse_l - sse_r
+        return gain
+
+
+class CrossEntropySplitCriterion(BaseSplitCriterion):
+    """
+    Implementation of the entropy-based split criterion for decision tree for classification tasks.
+    For each split candidate, the reduction of the sum of square errors is considers.
+
+    Notes
+    -----
+    This Criterion is only suitable for classification tasks
+    """
+    def _compute_split_gain_by_feature(self, X, y, feature_id, estimator, mt, n_left, n_right, sort_idx, splits, *args):
+        """
+        This method computes an approximation of the gain using the gradient split criterion.
+        The computation is done for each split point candidate along one feature-axis.
+
+        Parameters
+        ----------
+        X : array-like, shape = [n_samples, n_features]
+            Input Features of the training data
+        y : array-like, shape = [n_samples] or [n_samples, n_outputs]
+            Target variable.
+        feature_id : int
+            ID of the feature, i.e. splitting along ``X[:,feature_id]``
+        estimator
+            Weak estimator trained on `X` and `y`
+        mt
+            Model Tree Object
+        n_left: array-like
+            Contains each split candidate the number of samples for the left child
+        n_right: array-like
+            Contains each split candidate the number of samples for the right child
+        sort_idx: array-like
+            Permutation to order X and y according to the currently analysed axis
+        splits: array-like
+            Zero-based index of the split candidates.
+            A split candidate (with index j) maps samples ``sort_idx[:splits[j]]`` to the left and
+            samples ``sort_idx[splits[j]:]`` to the right child node
+
+        Returns
+        -------
+        gain: array-like
+            The approximate gain per split candidate
+
+        Warnings
+        --------
+        The class and this method are still under development and it might undergo heavy change in the future.
+        """
+        # Target Vector vs. Target Matrix
+        target_1d = len(np.shape(y)) == 1
+
+        # Number of samples
+        n = np.shape(y)[0]
+
+        # Total sum of y
+        ys = y.sum(axis=0)
+
+        # Cumulative sum of y
+        ycs_l = y[sort_idx].cumsum(axis=0)
+        ycs_r = ys - ycs_l
+
+        # Compute probabilities
+        p_l = ycs_l[splits] / n_left
+        p_r = ycs_r[splits] / n_right
+        p = ys / n
+
+        # Compute Gain
+        if target_1d:
+            # Binary classification; just class 1 probability is stored in p, p_l, p_r
+            gain = entropy([p, 1-p]) - entropy([p_l, 1-p_l], axis=0) - entropy([p_r, 1-p_r], axis=0)
+        else:
+            # Propbabilities for all classes are stored in p, p_l, p_r along axis 1
+            gain = entropy(p) - entropy(p_l, axis=1) - entropy(p_r, axis=1)
 
         return gain
