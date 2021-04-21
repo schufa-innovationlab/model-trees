@@ -176,7 +176,7 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
         else:
             self.n_outputs_ = np.shape(y)[1]
 
-    def _create_tree_structure(self, X, y, depth=0):
+    def _create_tree_structure(self, X, y, parent_node=None):
         """
         Recursively creates the model (sub-)tree structure with respect to the provided training data.
 
@@ -186,8 +186,9 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
             Input Features of the training data
         y : array-like, shape = [n_samples] or [n_samples, n_outputs]
             Target variable.
-        depth: int
-            Zero-Based depth of the node
+        parent_node : TreeNode
+            Parent node of the node to be created
+
         Returns
         -------
         root : TreeNode
@@ -197,6 +198,12 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
 
         # Create and train base estimator
         estimator = self._create_and_fit_estimator(X, y)
+
+        # Derive depth
+        if parent_node is None:
+            depth = 0
+        else:
+            depth = parent_node.depth + 1
 
         # Only split, if this node is not a leaf node. A node is a leaf node, if
         #   - The maximal depth is reached
@@ -212,21 +219,23 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
                 # Split trainings data and create child nodes from the
                 child_data = split._apply_split(X, y)
 
-                # (Recursively) create child nodes
-                children = [self._create_tree_structure(cX, cy, depth=depth + 1) for cX, cy in child_data]
-
-                return TreeNode(
-                    depth=depth,
+                # Create node with empty children
+                node = TreeNode(
+                    parent_node=parent_node,
                     estimator=estimator,
-                    children=children,
                     split=split
                 )
+
+                # (Recursively) create child nodes
+                node.children = [self._create_tree_structure(cX, cy, parent_node=node) for cX, cy in child_data]
+
+                return node
             else:
                 # If not split was found, return es leaf node
-                return TreeNode(depth=depth, estimator=estimator)
+                return TreeNode(parent_node=parent_node, estimator=estimator)
         else:
             # Create leaf node
-            return TreeNode(depth=depth, estimator=estimator)
+            return TreeNode(parent_node=parent_node, estimator=estimator)
 
     def _is_leaf_node(self, depth, X, y, model):
         """
