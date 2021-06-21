@@ -153,6 +153,7 @@ class TreeNode:
 
         return path
 
+
 class Split:
     """
     Defines a splitting of a decision / model tree node, i.e. the mapping of samples to the child node.
@@ -165,14 +166,14 @@ class Split:
     ----------
     split_feature : int
         Index of the feature that is used for the split
-    split_threshold : int
+    split_threshold : float
         Threshold for the split.
 
     Attributes
     ----------
     split_feature : int
         Index of the feature that is used for the split
-    split_threshold : int
+    split_threshold : float
         Threshold for the split.
     """
     def __init__(self, split_feature, split_threshold):
