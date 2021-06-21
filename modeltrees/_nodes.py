@@ -23,8 +23,8 @@ class TreeNode:
 
     Parameters
     ----------
-    depth : int, (default=0)
-        Zero-based depth of the node in the tree
+    parent_node : TreeNode or None
+        Parent node or None if this is a root node
     estimator : object
         Base estimator of the node.
         This estimator is used in leaf nodes for predictions, but can also be stored in other nodes.
@@ -35,6 +35,8 @@ class TreeNode:
 
     Attributes
     ----------
+    parent_node : TreeNode or None
+        Parent node or None if this is a root node
     depth : int, (default=0)
         Zero-based depth of the node in the tree
     estimator : object
@@ -56,11 +58,16 @@ class TreeNode:
 
     """
 
-    def __init__(self, depth=0, estimator=None, children=None, split=None):
-        self.depth = depth
+    def __init__(self, parent_node=None, estimator=None, children=None, split=None):
+        self.parent_node = parent_node
         self.estimator = estimator
         self.children = children
         self.split = split
+
+        if parent_node is None:
+            self.depth = 0
+        else:
+            self.depth = parent_node.depth + 1
 
     def is_leaf(self):
         """
@@ -71,6 +78,16 @@ class TreeNode:
         True, if the node is a leaf node.
         """
         return self.split is None
+
+    def is_root(self):
+        """
+        Checks, if the node is a root node, i.e. no parent_node is set.
+
+        Returns
+        -------
+        True, if the node is a root node.
+        """
+        return self.parent_node is None
 
     def map_to_leaf(self, X):
         """
@@ -118,6 +135,23 @@ class TreeNode:
             # Return results
             return leaf_idx, leafs
 
+    def get_path(self):
+        """
+        Gets the path from the root to this node
+
+        Returns
+        -------
+        path : list of TreeNode
+            The list of TreeNodes along the path from the root to this node
+        """
+        path = []
+
+        node = self
+        while node is not None:
+            path.insert(0, node)
+            node = node.parent_node
+
+        return path
 
 class Split:
     """

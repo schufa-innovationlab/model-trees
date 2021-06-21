@@ -176,7 +176,7 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
         else:
             self.n_outputs_ = np.shape(y)[1]
 
-    def _create_tree_structure(self, X, y, depth=0):
+    def _create_tree_structure(self, X, y, parent_node=None):
         """
         Recursively creates the model (sub-)tree structure with respect to the provided training data.
 
@@ -186,17 +186,25 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
             Input Features of the training data
         y : array-like, shape = [n_samples] or [n_samples, n_outputs]
             Target variable.
-        depth: int
-            Zero-Based depth of the node
+        parent_node : TreeNode
+            Parent node of the node to be created
+
         Returns
         -------
         root : TreeNode
             Root node of the created (sub-)tree
 
         """
+        # Handle parent
+        if parent_node is None:
+            depth = 0
+            ref_estimator = None
+        else:
+            depth = parent_node.depth + 1
+            ref_estimator = parent_node.estimator
 
         # Create and train base estimator
-        estimator = self._create_and_fit_estimator(X, y)
+        estimator = self._create_and_fit_estimator(X, y, reference_estimator=ref_estimator)
 
         # Only split, if this node is not a leaf node. A node is a leaf node, if
         #   - The maximal depth is reached
@@ -212,21 +220,23 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
                 # Split trainings data and create child nodes from the
                 child_data = split._apply_split(X, y)
 
-                # (Recursively) create child nodes
-                children = [self._create_tree_structure(cX, cy, depth=depth + 1) for cX, cy in child_data]
-
-                return TreeNode(
-                    depth=depth,
+                # Create node with empty children
+                node = TreeNode(
+                    parent_node=parent_node,
                     estimator=estimator,
-                    children=children,
                     split=split
                 )
+
+                # (Recursively) create child nodes
+                node.children = [self._create_tree_structure(cX, cy, parent_node=node) for cX, cy in child_data]
+
+                return node
             else:
                 # If not split was found, return es leaf node
-                return TreeNode(depth=depth, estimator=estimator)
+                return TreeNode(parent_node=parent_node, estimator=estimator)
         else:
             # Create leaf node
-            return TreeNode(depth=depth, estimator=estimator)
+            return TreeNode(parent_node=parent_node, estimator=estimator)
 
     def _is_leaf_node(self, depth, X, y, model):
         """
@@ -253,7 +263,7 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
         """
         return (depth >= self.max_depth) or (X.shape[0] < self.min_samples_split * 2)
 
-    def _create_and_fit_estimator(self, X, y):
+    def _create_and_fit_estimator(self, X, y, reference_estimator=None):
         """
         Creates a new estimator for a node and trains it with the provided data.
 
@@ -263,13 +273,18 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
             Input Features of the training data
         y : array-like, shape = [n_samples] or [n_samples, n_outputs]
             Target variable.
+        reference_estimator
+            A reference estimator that is cloned. This allows for warm_starts
 
         Returns
         -------
         estimator
             The trained estimator
         """
-        estimator = clone(self.base_estimator)
+        if reference_estimator is None:
+            reference_estimator = self.base_estimator
+
+        estimator = clone(reference_estimator)
         estimator.fit(X, y)
         return estimator
 
@@ -514,7 +529,7 @@ class ModelTreeClassifier(BaseModelTree, ClassifierMixin):
 
         return self._apply_sample_wise_function_on_leafs(leaf_predict_log_proba, X)
 
-    def _create_and_fit_estimator(self, X, y):
+    def _create_and_fit_estimator(self, X, y, reference_estimator=None):
         """
         Creates a new estimator for a node and trains it with the provided data.
 
@@ -524,6 +539,8 @@ class ModelTreeClassifier(BaseModelTree, ClassifierMixin):
             Input Features of the training data
         y : array-like, shape = [n_samples] or [n_samples, n_outputs]
             Target variable.
+        reference_estimator
+            A reference estimator that is cloned. This allows for warm_starts
 
         Returns
         -------
@@ -541,7 +558,7 @@ class ModelTreeClassifier(BaseModelTree, ClassifierMixin):
             cls.fit(X, y)
             return cls
         else:
-            return super()._create_and_fit_estimator(X, y)
+            return super()._create_and_fit_estimator(X, y, reference_estimator)
 
     def _is_leaf_node(self, depth, X, y, model):
         """
