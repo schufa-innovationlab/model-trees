@@ -22,13 +22,42 @@ from ._nodes import Split
 import warnings
 import numpy as np
 from scipy.stats import entropy
+from sklearn.base import BaseEstimator
 
 
 # Algorithm constants
 _EPS = 0.001
 
 
-class BaseSplitCriterion(metaclass=ABCMeta):
+class WithParamsMixin:
+    """
+    A mixin that that adds scikit-learn parameters to a non-estimator class.
+    This is helpful for nested objects, e.g. split criteria with hyper-parameters.
+    """
+    def _get_param_names(self):
+        return []
+
+    def get_params(self, deep=True):
+        """
+        List of parameters of the object.
+
+        Parameters
+        ----------
+        deep: bool
+            If true, the parameters of nested objects will also be added.
+
+        Returns
+        -------
+        dict
+            Dictionary of parameter-value pairs.
+        """
+        return {name:getattr(self,name) for name in self._get_param_names()}
+
+    # Copying the set_parameter behaviour of sklearn estimators.
+    set_params = BaseEstimator.set_params
+
+
+class BaseSplitCriterion(WithParamsMixin,metaclass=ABCMeta):
     """
     Base Class for split criteria.
     """
@@ -320,6 +349,9 @@ class BaseSplitCriterion(metaclass=ABCMeta):
         """
         pass
 
+    def _get_param_names(self):
+        return []
+
 
 class GradientSplitCriterion(BaseSplitCriterion):
     """
@@ -414,7 +446,7 @@ class GradientSplitCriterion(BaseSplitCriterion):
         # Compute the sum of gradients for the right side
         g_sum_right = g_sum - g_sum_left
 
-        # Renormalize Gradients (if renormalization is implemented
+        # Renormalize Gradients (if renormalization is implemented)
         g_sum_left, g_sum_right = self._renormalize_gradients(X, estimator, g_sum_left, g_sum_right, mt, n_left, n_right, sort_idx, splits)
 
         # Compute the Gain (see Eq. (6) in [1])
