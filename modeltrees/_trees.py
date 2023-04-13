@@ -52,7 +52,6 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
                  base_estimator,
                  criterion="gradient",
                  max_depth=3,
-                 min_samples_split=10,
                  gradient_function=None,
                  renorm_function=None):
         """
@@ -66,8 +65,6 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
             returns a split object and the approximated gain
         max_depth : int (default = 3)
             Maximal depth of the tree
-        min_samples_split : int (default = 10)
-            Minimal number of samples that go to each split
         gradient_function : callable
             A function that computes the gradient of a model with respect to the model parameters at given points.
             The gradient_function gets 3 parameters: a fitted model (see base_estimator),
@@ -83,7 +80,6 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
         self.base_estimator = base_estimator
         self.criterion = criterion
         self.max_depth = max_depth
-        self.min_samples_split = min_samples_split
         self.gradient_function = gradient_function
         self.renorm_function = renorm_function
 
@@ -261,7 +257,7 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
         bool
             True, iff this is a leaf node and no further split shall be performed
         """
-        return (depth >= self.max_depth) or (X.shape[0] < self.min_samples_split * 2)
+        return (depth >= self.max_depth)
 
     def _create_and_fit_estimator(self, X, y, reference_estimator=None):
         """
@@ -364,8 +360,6 @@ class ModelTreeRegressor(BaseModelTree, RegressorMixin):
         Split Criterion. Supported values are: `"gradient"` and `"gradient-renorm-z"`
     max_depth : int (default = 3)
         Maximal depth of the tree
-    min_samples_split : int (default = 10)
-        Minimal number of samples that go to each split
     gradient_function : callable
         A function that computes the gradient of a model with respect to the model parameters at given points.
         The gradient_function gets 3 parameters: a fitted model (see base_estimator),
@@ -394,14 +388,12 @@ class ModelTreeRegressor(BaseModelTree, RegressorMixin):
                  base_estimator=LinearRegression(),
                  criterion="gradient",
                  max_depth=3,
-                 min_samples_split=10,
                  gradient_function=None,
                  renorm_function=None):
         super().__init__(
             base_estimator=base_estimator,
             criterion=criterion,
             max_depth=max_depth,
-            min_samples_split=min_samples_split,
             gradient_function=gradient_function,
             renorm_function=renorm_function
         )
@@ -422,8 +414,6 @@ class ModelTreeClassifier(BaseModelTree, ClassifierMixin):
         Split Criterion. Supported values are: `"gradient"` and `"gradient-renorm-z"`
     max_depth : int (default = 3)
         Maximal depth of the tree
-    min_samples_split : int (default = 10)
-        Minimal number of samples that go to each split
     gradient_function : callable
         A function that computes the gradient of a model with respect to the model parameters at given points.
         The gradient_function gets 3 parameters: a fitted model (see base_estimator),
@@ -456,7 +446,6 @@ class ModelTreeClassifier(BaseModelTree, ClassifierMixin):
                  base_estimator=LogisticRegression(solver="liblinear"),
                  criterion="gradient",
                  max_depth=3,
-                 min_samples_split=10,
                  gradient_function=None,
                  renorm_function=None,
                  dummy_classifier=DummyClassifier(strategy="prior")):
@@ -464,7 +453,6 @@ class ModelTreeClassifier(BaseModelTree, ClassifierMixin):
             base_estimator=base_estimator,
             criterion=criterion,
             max_depth=max_depth,
-            min_samples_split=min_samples_split,
             gradient_function=gradient_function,
             renorm_function=renorm_function)
         self.dummy_classifier = dummy_classifier

@@ -60,7 +60,16 @@ class WithParamsMixin:
 class BaseSplitCriterion(WithParamsMixin,metaclass=ABCMeta):
     """
     Base Class for split criteria.
+
+    Parameters
+    ----------
+    min_samples_per_node : int (default = 10)
+        Minimal number of samples that are used to train a node (including leaf nodes)
     """
+
+    def __init__(self, min_samples_per_node=10):
+        self.min_samples_per_node = min_samples_per_node
+
     def __call__(self, X, y, estimator, mt):
         """
         Finds the best split point for a tree node based on the training data.
@@ -299,8 +308,8 @@ class BaseSplitCriterion(WithParamsMixin,metaclass=ABCMeta):
         n_left = splits
         n_right = n_samples - n_left
 
-        # Ignore all splits where one child has less than `min_samples_split` training samples
-        filter = np.minimum(n_left, n_right) >= mt.min_samples_split
+        # Ignore all splits where one child has less than `min_samples_per_node` training samples
+        filter = np.minimum(n_left, n_right) >= self.min_samples_per_node
         splits = splits[filter]
         n_left = n_left[filter]
         n_right = n_right[filter]
@@ -350,7 +359,7 @@ class BaseSplitCriterion(WithParamsMixin,metaclass=ABCMeta):
         pass
 
     def _get_param_names(self):
-        return []
+        return ["min_samples_per_node"]
 
 
 class GradientSplitCriterion(BaseSplitCriterion):
