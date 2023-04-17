@@ -51,7 +51,7 @@ class WithParamsMixin:
         dict
             Dictionary of parameter-value pairs.
         """
-        return {name:getattr(self,name) for name in self._get_param_names()}
+        return {name: getattr(self, name) for name in self._get_param_names()}
 
     # Copying the set_parameter behaviour of sklearn estimators.
     set_params = BaseEstimator.set_params
@@ -199,14 +199,17 @@ class BaseSplitCriterion(WithParamsMixin,metaclass=ABCMeta):
         # Compute the split gain along an axis
         gain = self._compute_split_gain_by_feature(X, y, feature_id, estimator, mt, n_left, n_right, sort_idx, splits, *split_info)
 
-        # Compute thresholds
-        thresh = self._get_threshold(X, feature_id, sort_idx, splits)
+        # Post-processing: Compute concrete thresholds
+        gain, thresh = self._post_process_splits(X, feature_id, sort_idx, splits, gain)
 
         return gain, thresh
 
-    def _get_threshold(self, X, feature_id, sort_idx, splits):
+    def _post_process_splits(self, X, feature_id, sort_idx, splits, gain):
         """
-        Get threshold inbetween the smallest right and larges left sample.
+        Postprocessing the splits. The main task is to convert split indices into concrete thresholds.
+
+        This method can be used in custom split criteria to perform some post-processing
+        on the threshold and/or the gain.
 
         Parameters
         ----------
@@ -220,15 +223,20 @@ class BaseSplitCriterion(WithParamsMixin,metaclass=ABCMeta):
             Zero-based index of the split candidates.
             A split candidate (with index j) maps samples ``sort_idx[:splits[j]]`` to the left and
             samples ``sort_idx[splits[j]:]`` to the right child node
+        gain: array-like
+            the computed gain for each split
 
         Returns
         -------
-
+        gain: array-like
+            The computed gain for each threshold
+        thresh: array-like
+            Concrete split thresholds instead of indices
         """
         upper = X[sort_idx[splits], feature_id]
         lower = X[sort_idx[splits - 1], feature_id]
         thresh = (upper + lower) / 2
-        return thresh
+        return gain, thresh
 
     def _precompute_splits(self, X, y, estimator, mt):
         """
