@@ -24,6 +24,8 @@ import numpy as np
 from scipy.stats import entropy
 from sklearn.base import BaseEstimator
 
+from ._gradients import get_default_gradient_function, get_default_renormalization_function
+
 
 # Algorithm constants
 _EPS = 0.001
@@ -400,12 +402,53 @@ class GradientSplitCriterion(BaseSplitCriterion):
     """
     A gradient-based split criterion for model trees.
 
+    Parameters
+    ----------
+    gradient_function : callable
+        A function that computes the gradient of a model with respect to the model parameters at given points.
+        The gradient_function gets 3 parameters: a fitted model (see base_estimator),
+        the input matrix X and the target vector y.
+
+    renorm_function : callable
+        A function that allows to renormalize gradients of a model.
+        The renorm_function gets 4 parameters: a fitted model (see base_estimator),
+        the gradient matrix g, a scale factor and a shift vector.
+        *The renormalization function must be set based on the `gradient_function`. Unsuitable functions might
+        result in bad results, exceptions and unexpected outcomes.*
+        **Note: Only set this parameter if you use a custom gradient function and know what you are doing.**
+
     References
     ----------
     .. [1] Broelemann, K. and Kasneci, G.,
        "A Gradient-Based Split Criterion for Highly Accurate and Transparent Model Trees",
        Proceedings of the International Joint Conference on Artificial Intelligence (IJCAI), 2019
     """
+
+    def __init__(self, min_samples_per_node=10, gradient_function=None, renorm_function=None):
+        super().__init__(min_samples_per_node=min_samples_per_node)
+        self.gradient_function = gradient_function
+        self.renorm_function = renorm_function
+
+    def validate_parameters(self, mt):
+        super().validate_parameters(mt)
+
+        # Check gradient function and try to get default
+        if self.gradient_function is None:
+            self.gf_ = get_default_gradient_function(mt.base_estimator)
+        else:
+            self.gf_ = self.gradient_function
+
+        # Check renormalization function and try to get default
+        if self.renorm_function is None:
+            self.rnf_ = get_default_renormalization_function(mt.base_estimator)
+        else:
+            if self.gradient_function is None:
+                warnings.warn(
+                    "Using a custom renormalization function with a standard gradient function will likely result in "
+                    "undesired outcomes.",
+                    UserWarning
+                )
+            self.rnf_ = self.renorm_function
 
     def _precompute_splits(self, X, y, estimator, mt):
         """
@@ -434,7 +477,7 @@ class GradientSplitCriterion(BaseSplitCriterion):
         The class and this method are still under development and it might undergo heavy change in the future.
         """
         # Compute gradient for all samples
-        g = mt.gf_(estimator, X, y)
+        g = self.gf_(estimator, X, y)
 
         # Compute the sum of the gradients (for a perfectly trained model this should be 0)
         g_sum = g.sum(axis=0)
@@ -543,8 +586,8 @@ class ZRenormGradientSplitCriterion(GradientSplitCriterion):
         mu_r = mu_r + mu
 
         # Renormalize gradients
-        g_sum_left = mt.rnf_(estimator, g_sum_left, 1 / sigma_l, -mu_l / sigma_l)
-        g_sum_right = mt.rnf_(estimator, g_sum_right, 1 / sigma_r, -mu_r / sigma_r)
+        g_sum_left = self.rnf_(estimator, g_sum_left, 1 / sigma_l, -mu_l / sigma_l)
+        g_sum_right = self.rnf_(estimator, g_sum_right, 1 / sigma_r, -mu_r / sigma_r)
 
         return g_sum_left, g_sum_right
 
