@@ -114,9 +114,11 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
         """
         Validates the provided model parameters.
 
-        Returns
-        -------
-
+        Raises
+        ------
+        ValueError
+            In case of invalid parameter values.
+            Individual details are given in the error message
         """
         # Check criterion
         if callable(self.criterion):
@@ -131,6 +133,9 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
                 self.criterion_ = criteria.ZRenormGradientSplitCriterion()
             else:
                 self.criterion_ = criteria.GradientSplitCriterion()
+
+        # Validate criterion parameters
+        if hasattr(self.criterion_, "validate_parameters"):
 
         # Check gradient function and try to get default
         if self.gradient_function is None:
@@ -149,6 +154,7 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
                     UserWarning
                 )
             self.rnf_ = self.renorm_function
+            self.criterion_.validate_parameters(mt=self)
 
     def _validate_training_data(self, X, y):
         """

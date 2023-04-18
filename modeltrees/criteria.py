@@ -98,6 +98,32 @@ class BaseSplitCriterion(WithParamsMixin,metaclass=ABCMeta):
         """
         return self.find_best_split(X, y, estimator, mt)
 
+    def validate_parameters(self, mt):
+        """
+        Validates the provided criteria parameters.
+
+        This method os called once, previous to fitting the model tree.
+        By doing so, one can avoid to validate the (unchanged) parameters again for each node.
+
+        The method allows to validate the parameters with respect to model-tree parameters.
+        For that reason, a reference to the calling ModelTree instance is provided.
+
+        Parameters
+        ----------
+        mt
+            ModelTree Instance
+
+        Raises
+        ------
+        ValueError
+            In case of invalid parameter values.
+            Individual details are given in the error message
+
+        """
+        if int(self.min_samples_per_node) != self.min_samples_per_node:
+            msg = f"`min_samples_per_node` should be an int."
+            raise ValueError(msg)
+
     def find_best_split(self, X, y, estimator, mt):
         """
         Finds the best split point for a tree node based on the training data.
