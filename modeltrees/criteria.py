@@ -72,7 +72,7 @@ class BaseSplitCriterion(WithParamsMixin,metaclass=ABCMeta):
     def __init__(self, min_samples_per_node=10):
         self.min_samples_per_node = min_samples_per_node
 
-    def __call__(self, X, y, estimator, mt):
+    def __call__(self, X, y, estimator, mt, parent_node):
         """
         Finds the best split point for a tree node based on the training data.
 
@@ -86,6 +86,10 @@ class BaseSplitCriterion(WithParamsMixin,metaclass=ABCMeta):
             Weak Estimator trained on all samples of the current node
         mt
             Model Tree for which the split criterion is used
+        parent_node
+            The parent node. Allows to build split criteria that behave differently based
+            on the location in the tree (such as the current depth)
+
         Returns
         -------
         split: Split
@@ -98,7 +102,7 @@ class BaseSplitCriterion(WithParamsMixin,metaclass=ABCMeta):
         The class and this method are still under development and they might undergo heavy change in the future.
 
         """
-        return self.find_best_split(X, y, estimator, mt)
+        return self.find_best_split(X, y, estimator, mt, parent_node)
 
     def validate_parameters(self, mt):
         """
@@ -126,7 +130,7 @@ class BaseSplitCriterion(WithParamsMixin,metaclass=ABCMeta):
             msg = f"`min_samples_per_node` should be an int."
             raise ValueError(msg)
 
-    def find_best_split(self, X, y, estimator, mt):
+    def find_best_split(self, X, y, estimator, mt, parent_node):
         """
         Finds the best split point for a tree node based on the training data.
 
@@ -140,12 +144,17 @@ class BaseSplitCriterion(WithParamsMixin,metaclass=ABCMeta):
             Weak Estimator trained on all samples of the current node
         mt
             Model Tree for which the split criterion is used
+        parent_node
+            The parent node. Allows to build split criteria that behave differently based
+            on the location in the tree (such as the current depth)
+
         Returns
         -------
         split: Split
             The new split. This can be used to grow the model tree
         gain: float
             The approximated gain by using the split.
+
 
         Warnings
         --------
@@ -155,14 +164,14 @@ class BaseSplitCriterion(WithParamsMixin,metaclass=ABCMeta):
         # Size of the sample set
         n_features = np.shape(X)[1]
 
-        split_info = self._precompute_splits(X, y, estimator, mt)
+        split_info = self._precompute_splits(X, y, estimator, mt, parent_node)
 
         # Compute split criterion on all possible splits
         best_split = None
         max_gain = -np.inf
         for i in range(n_features):
             # Compute split thresholds and gain
-            gain, thresh = self.compute_split_gain_by_feature(X, y, i, estimator, mt, split_info)
+            gain, thresh = self.compute_split_gain_by_feature(X, y, i, estimator, mt, parent_node, split_info)
 
             # Check if splits could be found
             if len(gain) < 1:
@@ -182,7 +191,7 @@ class BaseSplitCriterion(WithParamsMixin,metaclass=ABCMeta):
 
         return best_split, max_gain
 
-    def compute_split_gain_by_feature(self, X, y, feature_id, estimator, mt, split_info = None):
+    def compute_split_gain_by_feature(self, X, y, feature_id, estimator, mt, parent_node, split_info=None):
         """
         This method identifies split candidates along one feature axis
         and computes the gain for each of these potential splits.
@@ -199,6 +208,9 @@ class BaseSplitCriterion(WithParamsMixin,metaclass=ABCMeta):
             Weak Model trained on all samples of the current node
         mt
             Model Tree for which the split criterion is used
+        parent_node
+            The parent node. Allows to build split criteria that behave differently based
+            on the location in the tree (such as the current depth)
         split_info: list
             Precomputed values.
 
@@ -222,10 +234,11 @@ class BaseSplitCriterion(WithParamsMixin,metaclass=ABCMeta):
 
         if split_info is None:
             # No precomputed values are provided
-            split_info = self._precompute_splits(X, y, estimator, mt)
+            split_info = self._precompute_splits(X, y, estimator, mt, parent_node)
 
         # Compute the split gain along an axis
-        gain = self._compute_split_gain_by_feature(X, y, feature_id, estimator, mt, n_left, n_right, sort_idx, splits, *split_info)
+        gain = self._compute_split_gain_by_feature(X, y, feature_id, estimator, mt, parent_node, n_left, n_right,
+                                                   sort_idx, splits, *split_info)
 
         # Post-processing: Compute concrete thresholds
         gain, thresh = self._post_process_splits(X, feature_id, sort_idx, splits, gain)
@@ -266,7 +279,7 @@ class BaseSplitCriterion(WithParamsMixin,metaclass=ABCMeta):
         thresh = (upper + lower) / 2
         return gain, thresh
 
-    def _precompute_splits(self, X, y, estimator, mt):
+    def _precompute_splits(self, X, y, estimator, mt, parent_node):
         """
         This method allows to precompute some information that is the same for each axis.
         An example are gradients on for the ``GradientSplitCriterion``
@@ -281,6 +294,9 @@ class BaseSplitCriterion(WithParamsMixin,metaclass=ABCMeta):
             The trained weak estimator in a node.
         mt
             A model tree instance
+        parent_node
+            The parent node. Allows to build split criteria that behave differently based
+            on the location in the tree (such as the current depth)
 
         Returns
         -------
@@ -353,7 +369,8 @@ class BaseSplitCriterion(WithParamsMixin,metaclass=ABCMeta):
         return n_left, n_right, splits
 
     @abstractmethod
-    def _compute_split_gain_by_feature(self, X, y, feature_id, estimator, mt, n_left, n_right, sort_idx, splits, *args):
+    def _compute_split_gain_by_feature(self, X, y, feature_id, estimator, mt, parent_node, n_left, n_right, sort_idx,
+                                       splits, *args):
         """
         Core method of the split criterion.
         This method computes an approximation of the gain for each split point candidate along one axis.
@@ -370,6 +387,9 @@ class BaseSplitCriterion(WithParamsMixin,metaclass=ABCMeta):
             Weak estimator trained on `X` and `y`
         mt
             Model Tree Object
+        parent_node
+            The parent node. Allows to build split criteria that behave differently based
+            on the location in the tree (such as the current depth)
         n_left: array-like
             Contains each split candidate the number of samples for the left child
         n_right: array-like
@@ -450,12 +470,13 @@ class GradientSplitCriterion(BaseSplitCriterion):
                 )
             self.rnf_ = self.renorm_function
 
-    def _precompute_splits(self, X, y, estimator, mt):
+    def _precompute_splits(self, X, y, estimator, mt, parent_node):
         """
         Precomputes the gradients for each sample
 
         Parameters
         ----------
+        parent_node
         X : array-like, shape = [n_samples, n_features]
             Input Features of the training data
         y : array-like, shape = [n_samples] or [n_samples, n_outputs]
@@ -484,7 +505,8 @@ class GradientSplitCriterion(BaseSplitCriterion):
 
         return g, g_sum
 
-    def _compute_split_gain_by_feature(self, X, y, feature_id, estimator, mt, n_left, n_right, sort_idx, splits, g, g_sum):
+    def _compute_split_gain_by_feature(self, X, y, feature_id, estimator, mt, parent_node, n_left, n_right, sort_idx,
+                                       splits, g, g_sum):
         """
         This method computes an approximation of the gain using the gradient split criterion.
         The computation is done for each split point candidate along one feature-axis.
@@ -501,6 +523,9 @@ class GradientSplitCriterion(BaseSplitCriterion):
             Weak estimator trained on `X` and `y`
         mt
             Model Tree Object
+        parent_node
+            The parent node. Allows to build split criteria that behave differently based
+            on the location in the tree (such as the current depth)
         n_left: array-like
             Contains each split candidate the number of samples for the left child
         n_right: array-like
@@ -601,7 +626,8 @@ class SumOfSquareErrorSplitCriterion(BaseSplitCriterion):
     -----
     The sum of square error criterion is meant to be used with regression trees.
     """
-    def _compute_split_gain_by_feature(self, X, y, feature_id, estimator, mt, n_left, n_right, sort_idx, splits, *args):
+    def _compute_split_gain_by_feature(self, X, y, feature_id, estimator, mt, parent_node, n_left, n_right, sort_idx,
+                                       splits, *args):
         """
         This method computes an approximation of the gain using the gradient split criterion.
         The computation is done for each split point candidate along one feature-axis.
@@ -618,6 +644,9 @@ class SumOfSquareErrorSplitCriterion(BaseSplitCriterion):
             Weak estimator trained on `X` and `y`
         mt
             Model Tree Object
+        parent_node
+            The parent node. Allows to build split criteria that behave differently based
+            on the location in the tree (such as the current depth)
         n_left: array-like
             Contains each split candidate the number of samples for the left child
         n_right: array-like
@@ -676,7 +705,8 @@ class CrossEntropySplitCriterion(BaseSplitCriterion):
     -----
     This Criterion is only suitable for classification tasks
     """
-    def _compute_split_gain_by_feature(self, X, y, feature_id, estimator, mt, n_left, n_right, sort_idx, splits, *args):
+    def _compute_split_gain_by_feature(self, X, y, feature_id, estimator, mt, parent_node, n_left, n_right, sort_idx,
+                                       splits, *args):
         """
         This method computes an approximation of the gain using the gradient split criterion.
         The computation is done for each split point candidate along one feature-axis.
@@ -693,6 +723,9 @@ class CrossEntropySplitCriterion(BaseSplitCriterion):
             Weak estimator trained on `X` and `y`
         mt
             Model Tree Object
+        parent_node
+            The parent node. Allows to build split criteria that behave differently based
+            on the location in the tree (such as the current depth)
         n_left: array-like
             Contains each split candidate the number of samples for the left child
         n_right: array-like

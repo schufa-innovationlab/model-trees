@@ -183,7 +183,7 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
         is_leaf = self._is_leaf_node(depth, X, y, estimator)
         if not is_leaf:
             # Find best split
-            split, gain = self.criterion_(X, y, estimator, self)
+            split, gain = self.criterion_(X, y, estimator, self, parent_node)
 
             # Did the algorithm find a split?
             if split is not None:
