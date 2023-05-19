@@ -20,12 +20,10 @@ from sklearn.base import MetaEstimatorMixin, BaseEstimator, RegressorMixin, Clas
 from sklearn.linear_model import LinearRegression, LogisticRegression
 from sklearn.dummy import DummyClassifier
 from abc import ABCMeta, abstractmethod
-import warnings
 
 import numpy as np
 
 from ._nodes import TreeNode
-from ._gradients import get_default_gradient_function, get_default_renormalization_function
 from . import criteria
 
 # Parameter Constants
@@ -51,41 +49,25 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
     def __init__(self,
                  base_estimator,
                  criterion="gradient",
-                 max_depth=3,
-                 min_samples_split=10,
-                 gradient_function=None,
-                 renorm_function=None):
+                 max_depth=3):
         """
         Parameters
         ----------
         base_estimator:
             Base estimator to be used in the nodes
+
         criterion : str
             Split Criterion. Supported values are: `"gradient"` and `"gradient-renorm-z"`
             It is also possible to provide a function that takes four arguments (X, y, weak model, model-tree) and
             returns a split object and the approximated gain
+
         max_depth : int (default = 3)
             Maximal depth of the tree
-        min_samples_split : int (default = 10)
-            Minimal number of samples that go to each split
-        gradient_function : callable
-            A function that computes the gradient of a model with respect to the model parameters at given points.
-            The gradient_function gets 3 parameters: a fitted model (see base_estimator),
-            the input matrix X and the target vector y.
-        renorm_function : callable
-            A function that allows to renormalize gradients of a model.
-            The renorm_function gets 4 parameters: a fitted model (see base_estimator),
-            the gradient matrix g, a scale factor and a shift vector.
-            *The renormalization function must be set based on the `gradient_function`. Unsuitable functions might
-            result in bad results, exceptions and unexpected outcomes.*
-            **Note: Only set this parameter if you use a custom gradient function and know what you are doing.**
+
         """
         self.base_estimator = base_estimator
         self.criterion = criterion
         self.max_depth = max_depth
-        self.min_samples_split = min_samples_split
-        self.gradient_function = gradient_function
-        self.renorm_function = renorm_function
 
     def fit(self, X, y):
         """
@@ -118,9 +100,11 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
         """
         Validates the provided model parameters.
 
-        Returns
-        -------
-
+        Raises
+        ------
+        ValueError
+            In case of invalid parameter values.
+            Individual details are given in the error message
         """
         # Check criterion
         if callable(self.criterion):
@@ -136,23 +120,9 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
             else:
                 self.criterion_ = criteria.GradientSplitCriterion()
 
-        # Check gradient function and try to get default
-        if self.gradient_function is None:
-            self.gf_ = get_default_gradient_function(self.base_estimator)
-        else:
-            self.gf_ = self.gradient_function
-
-        # Check renormalization function and try to get default
-        if self.renorm_function is None:
-            self.rnf_ = get_default_renormalization_function(self.base_estimator)
-        else:
-            if self.gradient_function is None:
-                warnings.warn(
-                    "Using a custom renormalization function with a standard gradient function will likely result in "
-                    "undesired outcomes.",
-                    UserWarning
-                )
-            self.rnf_ = self.renorm_function
+        # Validate criterion parameters
+        if hasattr(self.criterion_, "validate_parameters"):
+            self.criterion_.validate_parameters(mt=self)
 
     def _validate_training_data(self, X, y):
         """
@@ -213,7 +183,7 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
         is_leaf = self._is_leaf_node(depth, X, y, estimator)
         if not is_leaf:
             # Find best split
-            split, gain = self.criterion_(X, y, estimator, self)
+            split, gain = self.criterion_(X, y, estimator, self, parent_node)
 
             # Did the algorithm find a split?
             if split is not None:
@@ -261,7 +231,7 @@ class BaseModelTree(BaseEstimator, MetaEstimatorMixin, metaclass=ABCMeta):
         bool
             True, iff this is a leaf node and no further split shall be performed
         """
-        return (depth >= self.max_depth) or (X.shape[0] < self.min_samples_split * 2)
+        return (depth >= self.max_depth)
 
     def _create_and_fit_estimator(self, X, y, reference_estimator=None):
         """
@@ -364,19 +334,6 @@ class ModelTreeRegressor(BaseModelTree, RegressorMixin):
         Split Criterion. Supported values are: `"gradient"` and `"gradient-renorm-z"`
     max_depth : int (default = 3)
         Maximal depth of the tree
-    min_samples_split : int (default = 10)
-        Minimal number of samples that go to each split
-    gradient_function : callable
-        A function that computes the gradient of a model with respect to the model parameters at given points.
-        The gradient_function gets 3 parameters: a fitted model (see base_estimator),
-        the input matrix X and the target vector y.
-    renorm_function : callable
-        A function that allows to renormalize gradients of a model.
-        The renorm_function gets 4 parameters: a fitted model (see base_estimator),
-        the gradient matrix g, a scale factor and a shift vector.
-        *The renormalization function must be set based on the `gradient_function`. Unsuitable functions might
-        result in bad results, exceptions and unexpected outcomes.*
-        **Note: Only set this parameter if you use a custom gradient function and know what you are doing.**
 
     Attributes
     ----------
@@ -393,17 +350,11 @@ class ModelTreeRegressor(BaseModelTree, RegressorMixin):
     def __init__(self,
                  base_estimator=LinearRegression(),
                  criterion="gradient",
-                 max_depth=3,
-                 min_samples_split=10,
-                 gradient_function=None,
-                 renorm_function=None):
+                 max_depth=3):
         super().__init__(
             base_estimator=base_estimator,
             criterion=criterion,
-            max_depth=max_depth,
-            min_samples_split=min_samples_split,
-            gradient_function=gradient_function,
-            renorm_function=renorm_function
+            max_depth=max_depth
         )
 
 
@@ -422,19 +373,6 @@ class ModelTreeClassifier(BaseModelTree, ClassifierMixin):
         Split Criterion. Supported values are: `"gradient"` and `"gradient-renorm-z"`
     max_depth : int (default = 3)
         Maximal depth of the tree
-    min_samples_split : int (default = 10)
-        Minimal number of samples that go to each split
-    gradient_function : callable
-        A function that computes the gradient of a model with respect to the model parameters at given points.
-        The gradient_function gets 3 parameters: a fitted model (see base_estimator),
-        the input matrix X and the target vector y.
-    renorm_function : callable
-        A function that allows to renormalize gradients of a model.
-        The renorm_function gets 4 parameters: a fitted model (see base_estimator),
-        the gradient matrix g, a scale factor and a shift vector.
-        *The renormalization function must be set based on the `gradient_function`. Unsuitable functions might
-        result in bad results, exceptions and unexpected outcomes.*
-        **Note: Only set this parameter if you use a custom gradient function and know what you are doing.**
     dummy_classifier
         Base estimator that is used in nodes where all training samples belong to one class.
 
@@ -456,17 +394,11 @@ class ModelTreeClassifier(BaseModelTree, ClassifierMixin):
                  base_estimator=LogisticRegression(solver="liblinear"),
                  criterion="gradient",
                  max_depth=3,
-                 min_samples_split=10,
-                 gradient_function=None,
-                 renorm_function=None,
                  dummy_classifier=DummyClassifier(strategy="prior")):
         super().__init__(
             base_estimator=base_estimator,
             criterion=criterion,
-            max_depth=max_depth,
-            min_samples_split=min_samples_split,
-            gradient_function=gradient_function,
-            renorm_function=renorm_function)
+            max_depth=max_depth)
         self.dummy_classifier = dummy_classifier
 
     def predict_proba(self, X):
