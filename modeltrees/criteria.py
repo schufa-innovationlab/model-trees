@@ -24,7 +24,7 @@ import numpy as np
 from scipy.stats import entropy
 from sklearn.base import BaseEstimator
 
-from ._gradients import get_default_gradient_function, get_default_renormalization_function
+from .gradients import get_default_gradient_function, get_default_renormalization_function
 
 
 # Algorithm constants
