@@ -19,11 +19,14 @@ If nothing else is specified, :func:`modeltrees.criteria.GradientSplitCriterion`
 #  limitations under the License.
 
 from sklearn.linear_model import LinearRegression, LogisticRegression
+from sklearn.pipeline import Pipeline
 
 from .linear import \
     gradient_linear_regression_square_loss, \
     gradient_logistic_regression_cross_entropy, \
     renormalize_linear_model_gradients
+
+from .pipelines import pipeline_gradient
 
 
 def get_default_gradient_function(model):
@@ -45,6 +48,12 @@ def get_default_gradient_function(model):
     gradient_logistic_regression_cross_entropy, gradient_linear_regression_square_loss
 
     """
+    if isinstance(model, Pipeline):
+        # Handle Pipelines
+        estimator = model.steps[-1][1]
+        gradient_fct = get_default_gradient_function(estimator)
+        return pipeline_gradient(gradient_fct)
+
     if type(model) not in _DEFAULT_GRADIENTS:
         raise ValueError(f"No default gradient defined for {type(model)}.")
     return _DEFAULT_GRADIENTS[type(model)]
