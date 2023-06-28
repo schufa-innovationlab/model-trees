@@ -169,7 +169,7 @@ class BaseSplitCriterion(WithParamsMixin,metaclass=ABCMeta):
         # Compute split criterion on all possible splits
         best_split = None
         max_gain = -np.inf
-        for i in range(n_features):
+        for i in self._split_feature_iterator(n_features):
             # Compute split thresholds and gain
             gain, thresh = self.compute_split_gain_by_feature(X, y, i, estimator, mt, parent_node, split_info)
 
@@ -190,6 +190,23 @@ class BaseSplitCriterion(WithParamsMixin,metaclass=ABCMeta):
                 )
 
         return best_split, max_gain
+
+    def _split_feature_iterator(self, n_features):
+        """
+        Returns an iterator over all split features.
+
+        This method allows for hooks, such as tqdm progress bars.
+
+        Parameters
+        ----------
+        n_features: int
+            Total number of features
+
+        Returns
+        -------
+        Iterator over all features.
+        """
+        return range(n_features)
 
     def compute_split_gain_by_feature(self, X, y, feature_id, estimator, mt, parent_node, split_info=None):
         """
