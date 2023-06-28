@@ -39,7 +39,7 @@ def pipeline_gradient(estimator_gradient):
         # Transform x
         Xt = X
         for name, transformer in pipe.steps[:-1]:
-            Xt = transformer.transform(X)
+            Xt = transformer.transform(Xt)
 
         # Compute gradient of final estimator
         estimator = pipe.steps[-1][1]
